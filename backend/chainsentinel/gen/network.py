@@ -1,294 +1,359 @@
-"""Realistic IP/ASN/Country pool for synthetic network simulation.
+"""Realistic IP/ASN/Country simulation backed by vendored MaxMind DB (.mmdb).
 
-Uses real-world ASN ranges so that GeoIP enrichment produces
-realistic country/ASN results. Never uses documentation ranges
+Uses real-world ASN ranges and MaxMind DB format so that GeoIP enrichment
+produces realistic country/ASN results. Never uses documentation ranges
 (192.0.2.x, 198.51.100.x, 203.0.113.x).
+The enricher and generator share only the .mmdb database file, never a Python table.
 """
 
 from __future__ import annotations
 
-import struct
 import socket
+import struct
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+import maxminddb
 from numpy.random import Generator
+
+
+def _ip_to_int(ip: str) -> int:
+    """Convert dotted IP string to integer."""
+    return struct.unpack("!I", socket.inet_aton(ip.strip()))[0]
+
+
+def _int_to_ip(n: int) -> str:
+    """Convert integer to dotted IP string."""
+    return socket.inet_ntoa(struct.pack("!I", n))
 
 
 @dataclass(frozen=True)
 class NetworkInfo:
-    """Network info for an IP range."""
+    """Network info for an IP range retrieved from MMDB."""
 
     asn: int
     asn_org: str
     country: str
-    prefix: str  # e.g. "104.16.0.0/16"
-    ip_start: int  # integer form of start IP
-    ip_end: int    # integer form of end IP
+    prefix: str
     is_hosting: bool = False
     is_tor: bool = False
     is_vpn: bool = False
 
 
-def _ip_to_int(ip: str) -> int:
-    """Convert dotted IP string to integer."""
-    return struct.unpack("!I", socket.inet_aton(ip))[0]
+# Known CIDR blocks indexed in the vendored dbip-country-asn-lite.mmdb database
+MMDB_PREFIXES: list[dict[str, Any]] = [
+    # United States
+    {"prefix": "104.16.0.0/16", "country": "US", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    {"prefix": "52.0.0.0/16", "country": "US", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    {"prefix": "35.192.0.0/16", "country": "US", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    {"prefix": "73.0.0.0/16", "country": "US", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "68.0.0.0/16", "country": "US", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "71.0.0.0/16", "country": "US", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "65.24.0.0/16", "country": "US", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Germany
+    {"prefix": "94.130.0.0/16", "country": "DE", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    {"prefix": "87.160.0.0/16", "country": "DE", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "81.169.0.0/16", "country": "DE", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    # Netherlands
+    {"prefix": "5.79.0.0/16", "country": "NL", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    {"prefix": "145.53.0.0/16", "country": "NL", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # France
+    {"prefix": "51.68.0.0/16", "country": "FR", "is_hosting": True, "is_tor": False, "is_vpn": False},
+    {"prefix": "90.0.0.0/16", "country": "FR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # United Kingdom
+    {"prefix": "82.0.0.0/16", "country": "GB", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "86.128.0.0/16", "country": "GB", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Russia
+    {"prefix": "95.24.0.0/16", "country": "RU", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "83.149.0.0/16", "country": "RU", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # China
+    {"prefix": "36.0.0.0/16", "country": "CN", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "60.0.0.0/16", "country": "CN", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Japan
+    {"prefix": "106.128.0.0/16", "country": "JP", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "129.250.0.0/16", "country": "JP", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # India
+    {"prefix": "117.192.0.0/16", "country": "IN", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "49.32.0.0/16", "country": "IN", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Brazil
+    {"prefix": "200.175.0.0/16", "country": "BR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "187.0.0.0/16", "country": "BR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Canada
+    {"prefix": "76.64.0.0/16", "country": "CA", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    {"prefix": "99.224.0.0/16", "country": "CA", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Australia
+    {"prefix": "101.160.0.0/16", "country": "AU", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Singapore
+    {"prefix": "27.104.0.0/16", "country": "SG", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # South Korea
+    {"prefix": "175.192.0.0/16", "country": "KR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Romania
+    {"prefix": "79.112.0.0/16", "country": "RO", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Ukraine
+    {"prefix": "176.36.0.0/16", "country": "UA", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Turkey
+    {"prefix": "85.96.0.0/16", "country": "TR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Iran
+    {"prefix": "5.112.0.0/16", "country": "IR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Sweden
+    {"prefix": "62.63.0.0/16", "country": "SE", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Switzerland
+    {"prefix": "178.192.0.0/16", "country": "CH", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Finland
+    {"prefix": "91.156.0.0/16", "country": "FI", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Czech Republic
+    {"prefix": "89.176.0.0/16", "country": "CZ", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Iceland
+    {"prefix": "82.148.0.0/16", "country": "IS", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Hong Kong
+    {"prefix": "119.236.0.0/16", "country": "HK", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Argentina
+    {"prefix": "181.14.0.0/16", "country": "AR", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Mexico
+    {"prefix": "189.128.0.0/16", "country": "MX", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Nigeria
+    {"prefix": "196.28.0.0/16", "country": "NG", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # South Africa
+    {"prefix": "197.80.0.0/16", "country": "ZA", "is_hosting": False, "is_tor": False, "is_vpn": False},
+    # Israel
+    {"prefix": "93.172.0.0/16", "country": "IL", "is_hosting": False, "is_tor": False, "is_vpn": False},
 
+    # Tor Exit Nodes Pool
+    {"prefix": "185.220.100.0/24", "country": "DE", "is_hosting": False, "is_tor": True, "is_vpn": False},
+    {"prefix": "185.220.101.0/24", "country": "DE", "is_hosting": False, "is_tor": True, "is_vpn": False},
+    {"prefix": "185.220.102.0/24", "country": "DE", "is_hosting": False, "is_tor": True, "is_vpn": False},
+    {"prefix": "77.247.181.0/24", "country": "NL", "is_hosting": False, "is_tor": True, "is_vpn": False},
+    {"prefix": "176.9.0.0/24", "country": "DE", "is_hosting": False, "is_tor": True, "is_vpn": False},
 
-def _int_to_ip(n: int) -> int | str:
-    """Convert integer to dotted IP string."""
-    return socket.inet_ntoa(struct.pack("!I", n))
-
-
-# ~50 realistic ASN/Country/IP combos covering major geographies
-# These are real-world ranges that will produce realistic GeoIP lookups
-NETWORK_POOL: list[NetworkInfo] = [
-    # --- United States ---
-    NetworkInfo(13335, "Cloudflare Inc.", "US", "104.16.0.0/16",
-                _ip_to_int("104.16.0.0"), _ip_to_int("104.16.255.255"), is_hosting=True),
-    NetworkInfo(16509, "Amazon.com Inc. (AWS)", "US", "52.0.0.0/16",
-                _ip_to_int("52.0.0.0"), _ip_to_int("52.0.255.255"), is_hosting=True),
-    NetworkInfo(15169, "Google LLC", "US", "35.192.0.0/16",
-                _ip_to_int("35.192.0.0"), _ip_to_int("35.192.255.255"), is_hosting=True),
-    NetworkInfo(7922, "Comcast Cable", "US", "73.0.0.0/16",
-                _ip_to_int("73.0.0.0"), _ip_to_int("73.0.255.255")),
-    NetworkInfo(22773, "Cox Communications", "US", "68.0.0.0/16",
-                _ip_to_int("68.0.0.0"), _ip_to_int("68.0.255.255")),
-    NetworkInfo(20115, "Charter Communications", "US", "71.0.0.0/16",
-                _ip_to_int("71.0.0.0"), _ip_to_int("71.0.255.255")),
-    NetworkInfo(701, "Verizon", "US", "65.24.0.0/16",
-                _ip_to_int("65.24.0.0"), _ip_to_int("65.24.255.255")),
-
-    # --- Germany ---
-    NetworkInfo(24940, "Hetzner Online GmbH", "DE", "94.130.0.0/16",
-                _ip_to_int("94.130.0.0"), _ip_to_int("94.130.255.255"), is_hosting=True),
-    NetworkInfo(3320, "Deutsche Telekom AG", "DE", "87.160.0.0/16",
-                _ip_to_int("87.160.0.0"), _ip_to_int("87.160.255.255")),
-    NetworkInfo(6724, "Strato AG", "DE", "81.169.0.0/16",
-                _ip_to_int("81.169.0.0"), _ip_to_int("81.169.255.255"), is_hosting=True),
-
-    # --- Netherlands ---
-    NetworkInfo(60781, "LeaseWeb Netherlands", "NL", "5.79.0.0/16",
-                _ip_to_int("5.79.0.0"), _ip_to_int("5.79.255.255"), is_hosting=True),
-    NetworkInfo(1136, "KPN B.V.", "NL", "145.53.0.0/16",
-                _ip_to_int("145.53.0.0"), _ip_to_int("145.53.255.255")),
-
-    # --- France ---
-    NetworkInfo(16276, "OVH SAS", "FR", "51.68.0.0/16",
-                _ip_to_int("51.68.0.0"), _ip_to_int("51.68.255.255"), is_hosting=True),
-    NetworkInfo(3215, "Orange S.A.", "FR", "90.0.0.0/16",
-                _ip_to_int("90.0.0.0"), _ip_to_int("90.0.255.255")),
-
-    # --- United Kingdom ---
-    NetworkInfo(5089, "Virgin Media", "GB", "82.0.0.0/16",
-                _ip_to_int("82.0.0.0"), _ip_to_int("82.0.255.255")),
-    NetworkInfo(2856, "BT Group", "GB", "86.128.0.0/16",
-                _ip_to_int("86.128.0.0"), _ip_to_int("86.128.255.255")),
-
-    # --- Russia ---
-    NetworkInfo(12389, "Rostelecom", "RU", "95.24.0.0/16",
-                _ip_to_int("95.24.0.0"), _ip_to_int("95.24.255.255")),
-    NetworkInfo(31163, "MTS PJSC", "RU", "83.149.0.0/16",
-                _ip_to_int("83.149.0.0"), _ip_to_int("83.149.255.255")),
-
-    # --- China ---
-    NetworkInfo(4134, "China Telecom", "CN", "36.0.0.0/16",
-                _ip_to_int("36.0.0.0"), _ip_to_int("36.0.255.255")),
-    NetworkInfo(4837, "China Unicom", "CN", "60.0.0.0/16",
-                _ip_to_int("60.0.0.0"), _ip_to_int("60.0.255.255")),
-
-    # --- Japan ---
-    NetworkInfo(2516, "KDDI Corporation", "JP", "106.128.0.0/16",
-                _ip_to_int("106.128.0.0"), _ip_to_int("106.128.255.255")),
-    NetworkInfo(2914, "NTT America", "JP", "129.250.0.0/16",
-                _ip_to_int("129.250.0.0"), _ip_to_int("129.250.255.255")),
-
-    # --- India ---
-    NetworkInfo(9829, "BSNL", "IN", "117.192.0.0/16",
-                _ip_to_int("117.192.0.0"), _ip_to_int("117.192.255.255")),
-    NetworkInfo(55836, "Reliance Jio", "IN", "49.32.0.0/16",
-                _ip_to_int("49.32.0.0"), _ip_to_int("49.32.255.255")),
-
-    # --- Brazil ---
-    NetworkInfo(7738, "Telemar Norte Leste", "BR", "200.175.0.0/16",
-                _ip_to_int("200.175.0.0"), _ip_to_int("200.175.255.255")),
-    NetworkInfo(28573, "Claro S.A.", "BR", "187.0.0.0/16",
-                _ip_to_int("187.0.0.0"), _ip_to_int("187.0.255.255")),
-
-    # --- Canada ---
-    NetworkInfo(577, "Bell Canada", "CA", "76.64.0.0/16",
-                _ip_to_int("76.64.0.0"), _ip_to_int("76.64.255.255")),
-    NetworkInfo(812, "Rogers Communications", "CA", "99.224.0.0/16",
-                _ip_to_int("99.224.0.0"), _ip_to_int("99.224.255.255")),
-
-    # --- Australia ---
-    NetworkInfo(1221, "Telstra", "AU", "101.160.0.0/16",
-                _ip_to_int("101.160.0.0"), _ip_to_int("101.160.255.255")),
-
-    # --- Singapore ---
-    NetworkInfo(4657, "StarHub Ltd.", "SG", "27.104.0.0/16",
-                _ip_to_int("27.104.0.0"), _ip_to_int("27.104.255.255")),
-
-    # --- South Korea ---
-    NetworkInfo(4766, "Korea Telecom", "KR", "175.192.0.0/16",
-                _ip_to_int("175.192.0.0"), _ip_to_int("175.192.255.255")),
-
-    # --- Romania (common for hosting) ---
-    NetworkInfo(8708, "RCS & RDS", "RO", "79.112.0.0/16",
-                _ip_to_int("79.112.0.0"), _ip_to_int("79.112.255.255")),
-
-    # --- Ukraine ---
-    NetworkInfo(13188, "TRIOLAN", "UA", "176.36.0.0/16",
-                _ip_to_int("176.36.0.0"), _ip_to_int("176.36.255.255")),
-
-    # --- Turkey ---
-    NetworkInfo(9121, "Turk Telekom", "TR", "85.96.0.0/16",
-                _ip_to_int("85.96.0.0"), _ip_to_int("85.96.255.255")),
-
-    # --- Iran ---
-    NetworkInfo(44244, "Irancell", "IR", "5.112.0.0/16",
-                _ip_to_int("5.112.0.0"), _ip_to_int("5.112.255.255")),
-
-    # --- Sweden ---
-    NetworkInfo(1257, "Tele2 Sverige AB", "SE", "62.63.0.0/16",
-                _ip_to_int("62.63.0.0"), _ip_to_int("62.63.255.255")),
-
-    # --- Switzerland ---
-    NetworkInfo(3303, "Swisscom", "CH", "178.192.0.0/16",
-                _ip_to_int("178.192.0.0"), _ip_to_int("178.192.255.255")),
-
-    # --- Finland ---
-    NetworkInfo(1759, "Telia Finland", "FI", "91.156.0.0/16",
-                _ip_to_int("91.156.0.0"), _ip_to_int("91.156.255.255")),
-
-    # --- Czech Republic ---
-    NetworkInfo(6830, "Liberty Global (UPC)", "CZ", "89.176.0.0/16",
-                _ip_to_int("89.176.0.0"), _ip_to_int("89.176.255.255")),
-
-    # --- Iceland (common for Bitcoin nodes) ---
-    NetworkInfo(6677, "Vodafone Iceland", "IS", "82.148.0.0/16",
-                _ip_to_int("82.148.0.0"), _ip_to_int("82.148.255.255")),
-
-    # --- Hong Kong ---
-    NetworkInfo(9304, "HGC Global Communications", "HK", "119.236.0.0/16",
-                _ip_to_int("119.236.0.0"), _ip_to_int("119.236.255.255")),
-
-    # --- Argentina ---
-    NetworkInfo(7303, "Telecom Argentina", "AR", "181.14.0.0/16",
-                _ip_to_int("181.14.0.0"), _ip_to_int("181.14.255.255")),
-
-    # --- Mexico ---
-    NetworkInfo(8151, "Telmex", "MX", "189.128.0.0/16",
-                _ip_to_int("189.128.0.0"), _ip_to_int("189.128.255.255")),
-
-    # --- Nigeria ---
-    NetworkInfo(29465, "MTN Nigeria", "NG", "196.28.0.0/16",
-                _ip_to_int("196.28.0.0"), _ip_to_int("196.28.255.255")),
-
-    # --- South Africa ---
-    NetworkInfo(37457, "Telkom SA", "ZA", "197.80.0.0/16",
-                _ip_to_int("197.80.0.0"), _ip_to_int("197.80.255.255")),
-
-    # --- Israel ---
-    NetworkInfo(12849, "Hot-Net Internet", "IL", "93.172.0.0/16",
-                _ip_to_int("93.172.0.0"), _ip_to_int("93.172.255.255")),
+    # VPN & Commercial Hosting Pool
+    {"prefix": "37.120.0.0/16", "country": "RO", "is_hosting": False, "is_tor": False, "is_vpn": True},
+    {"prefix": "45.76.0.0/16", "country": "NL", "is_hosting": True, "is_tor": False, "is_vpn": True},
+    {"prefix": "149.28.0.0/16", "country": "US", "is_hosting": True, "is_tor": False, "is_vpn": True},
+    {"prefix": "164.90.0.0/16", "country": "US", "is_hosting": True, "is_tor": False, "is_vpn": True},
+    {"prefix": "138.68.0.0/16", "country": "DE", "is_hosting": True, "is_tor": False, "is_vpn": True},
 ]
 
-# Tor exit nodes pool — dedicated IPs that will be flagged as Tor
-TOR_EXIT_POOL: list[NetworkInfo] = [
-    NetworkInfo(47674, "Tor Exit Node (Quintex)", "DE", "185.220.100.0/24",
-                _ip_to_int("185.220.100.0"), _ip_to_int("185.220.100.255"), is_tor=True),
-    NetworkInfo(47674, "Tor Exit Node (Quintex)", "DE", "185.220.101.0/24",
-                _ip_to_int("185.220.101.0"), _ip_to_int("185.220.101.255"), is_tor=True),
-    NetworkInfo(200052, "Tor Exit Node (F3Netze)", "DE", "185.220.102.0/24",
-                _ip_to_int("185.220.102.0"), _ip_to_int("185.220.102.255"), is_tor=True),
-    NetworkInfo(60729, "Tor Exit Node (Stichting)", "NL", "77.247.181.0/24",
-                _ip_to_int("77.247.181.0"), _ip_to_int("77.247.181.255"), is_tor=True),
-    NetworkInfo(51167, "Tor Exit Node (Contabo)", "DE", "176.9.0.0/24",
-                _ip_to_int("176.9.0.0"), _ip_to_int("176.9.0.255"), is_tor=True),
-]
 
-# VPN/hosting ranges used by obfuscated illicit actors
-VPN_POOL: list[NetworkInfo] = [
-    NetworkInfo(9009, "M247 Ltd (VPN)", "RO", "37.120.0.0/16",
-                _ip_to_int("37.120.0.0"), _ip_to_int("37.120.255.255"), is_vpn=True),
-    NetworkInfo(20473, "Vultr Holdings (VPN/hosting)", "NL", "45.76.0.0/16",
-                _ip_to_int("45.76.0.0"), _ip_to_int("45.76.255.255"), is_vpn=True, is_hosting=True),
-    NetworkInfo(20473, "Vultr Holdings (VPN/hosting)", "US", "149.28.0.0/16",
-                _ip_to_int("149.28.0.0"), _ip_to_int("149.28.255.255"), is_vpn=True, is_hosting=True),
-    NetworkInfo(14061, "DigitalOcean LLC", "US", "164.90.0.0/16",
-                _ip_to_int("164.90.0.0"), _ip_to_int("164.90.255.255"), is_vpn=True, is_hosting=True),
-    NetworkInfo(14061, "DigitalOcean LLC", "DE", "138.68.0.0/16",
-                _ip_to_int("138.68.0.0"), _ip_to_int("138.68.255.255"), is_vpn=True, is_hosting=True),
-]
+def find_geoip_db_path() -> Path:
+    """Find the vendored GeoIP MMDB database."""
+    base_dir = Path(__file__).resolve().parent.parent
+    candidates = [
+        base_dir / "data" / "geoip" / "dbip-country-asn-lite.mmdb",
+        Path("backend/chainsentinel/data/geoip/dbip-country-asn-lite.mmdb"),
+        Path("data/geoip/dbip-country-asn-lite.mmdb"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.resolve()
+    raise FileNotFoundError(f"Vendored GeoIP MMDB file not found. Looked in: {[str(c) for c in candidates]}")
 
 
 class NetworkSimulator:
-    """Manages IP allocation and network relay simulation."""
+    """Manages IP allocation and network relay simulation using vendored MMDB."""
 
-    def __init__(self, rng: Generator, n_sensors: int = 5, n_relay_nodes: int = 200):
+    def __init__(
+        self,
+        rng: Generator,
+        n_sensors: int = 5,
+        n_relay_nodes: int = 200,
+        mmdb_path: Path | None = None,
+    ):
         self.rng = rng
-        self.n_sensors = n_sensors
+        self.n_sensors = max(5, n_sensors)
         self.n_relay_nodes = n_relay_nodes
 
-        # Assign sensor IPs from diverse countries
-        sensor_nets = self.rng.choice(
-            [n for n in NETWORK_POOL if not n.is_hosting],
-            size=min(n_sensors, len(NETWORK_POOL)),
+        db_file = mmdb_path or find_geoip_db_path()
+        self.mmdb_reader = maxminddb.open_database(str(db_file))
+
+        # Sensor vantage points
+        standard_prefixes = [p for p in MMDB_PREFIXES if not p["is_hosting"] and not p["is_tor"] and not p["is_vpn"]]
+        sensor_choice = self.rng.choice(
+            standard_prefixes,
+            size=min(self.n_sensors, len(standard_prefixes)),
             replace=False,
         )
-        self.sensor_ips = [self._sample_ip(net) for net in sensor_nets]
-        self.sensor_networks = {ip: net for ip, net in zip(self.sensor_ips, sensor_nets)}
+        self.sensor_ids = [f"sensor_{i}" for i in range(len(sensor_choice))]
+        self.sensor_ips = [self._sample_ip_from_prefix(p["prefix"]) for p in sensor_choice]
+        self.sensor_map = {sid: ip for sid, ip in zip(self.sensor_ids, self.sensor_ips)}
+        self.ip_to_sensor = {ip: sid for sid, ip in zip(self.sensor_ids, self.sensor_ips)}
 
-        # Assign relay node IPs from diverse networks
-        relay_nets = self.rng.choice(NETWORK_POOL, size=n_relay_nodes, replace=True)
-        self.relay_ips = [self._sample_ip(net) for net in relay_nets]
-        self.relay_networks = {ip: net for ip, net in zip(self.relay_ips, relay_nets)}
+        # Relay nodes (drawn across diverse global ranges)
+        relay_choice = self.rng.choice(MMDB_PREFIXES, size=n_relay_nodes, replace=True)
+        self.relay_ips = [self._sample_ip_from_prefix(p["prefix"]) for p in relay_choice]
 
-        # Build lookup for all known IPs
-        self._ip_to_network: dict[str, NetworkInfo] = {}
-        self._ip_to_network.update(self.sensor_networks)
-        self._ip_to_network.update(self.relay_networks)
+        # Internal cache of IP metadata
+        self._ip_cache: dict[str, NetworkInfo] = {}
+        for ip in self.sensor_ips + self.relay_ips:
+            self._lookup_and_cache(ip)
 
-    def _sample_ip(self, net: NetworkInfo) -> str:
-        """Sample a random IP from a network range."""
-        ip_int = self.rng.integers(net.ip_start + 1, net.ip_end)
-        return _int_to_ip(int(ip_int))
+    def close(self) -> None:
+        """Close reader database."""
+        if hasattr(self, "mmdb_reader") and self.mmdb_reader:
+            self.mmdb_reader.close()
 
-    def allocate_entity_ip(self, country_hint: str | None = None,
-                           use_tor: bool = False, use_vpn: bool = False) -> tuple[str, NetworkInfo]:
+    def _sample_ip_from_prefix(self, prefix: str) -> str:
+        """Sample an IP inside a CIDR prefix."""
+        ip_str, mask_str = prefix.split("/")
+        mask = int(mask_str)
+        ip_int = _ip_to_int(ip_str)
+        host_bits = 32 - mask
+        num_hosts = 1 << host_bits
+        offset = int(self.rng.integers(2, max(3, num_hosts - 2)))
+        return _int_to_ip(ip_int + offset)
+
+    def _lookup_and_cache(self, ip: str) -> NetworkInfo:
+        """Query MMDB for an IP and cache."""
+        if ip in self._ip_cache:
+            return self._ip_cache[ip]
+
+        rec = self.mmdb_reader.get(ip)
+        if rec:
+            country = rec.get("country", {}).get("iso_code", "US")
+            asn_num = rec.get("autonomous_system_number", 0)
+            asn_org = rec.get("autonomous_system_organization", "Unknown ISP")
+            traits = rec.get("traits", {})
+            net_info = NetworkInfo(
+                asn=asn_num,
+                asn_org=asn_org,
+                country=country,
+                prefix=rec.get("network", f"{ip}/32"),
+                is_hosting=traits.get("is_hosting_provider", False),
+                is_tor=traits.get("is_tor_exit_node", False),
+                is_vpn=traits.get("is_vpn", False),
+            )
+        else:
+            net_info = NetworkInfo(
+                asn=0,
+                asn_org="Generic Node",
+                country="US",
+                prefix=f"{ip}/32",
+            )
+        self._ip_cache[ip] = net_info
+        return net_info
+
+    def get_network_info(self, ip: str) -> NetworkInfo | None:
+        """Look up network info for an IP from MMDB."""
+        return self._lookup_and_cache(ip)
+
+    def allocate_entity_ip(
+        self,
+        country_hint: str | None = None,
+        use_tor: bool | None = None,
+        use_vpn: bool | None = None,
+        is_illicit: bool = False,
+        obfuscation_level: int = 0,
+        archetype: str | None = None,
+    ) -> tuple[str, NetworkInfo]:
         """Allocate an IP for an entity operator.
 
-        Args:
-            country_hint: Preferred country code (best effort).
-            use_tor: If True, pick from Tor exit pool.
-            use_vpn: If True, pick from VPN pool.
-
-        Returns:
-            Tuple of (ip_string, NetworkInfo).
+        Removes the deterministic leak:
+        - Obfuscation level does NOT perfectly correlate with IP class.
+        - Some legit entities use VPN/hosting/Tor (tech users, merchants, exchanges).
+        - Some illicit actors use direct residential/mobile IPs.
         """
-        if use_tor:
-            net = self.rng.choice(TOR_EXIT_POOL)
-        elif use_vpn:
-            net = self.rng.choice(VPN_POOL)
-        elif country_hint:
-            candidates = [n for n in NETWORK_POOL if n.country == country_hint]
-            if candidates:
-                net = self.rng.choice(candidates)
+        # Determine pool category probabilistically if not explicitly forced
+        target_tor = use_tor
+        target_vpn = use_vpn
+        target_hosting = False
+
+        if target_tor is None and target_vpn is None:
+            r = float(self.rng.random())
+            if is_illicit:
+                # Illicit obfuscation levels 0-3
+                if obfuscation_level == 0:
+                    # Level 0: mostly direct residential/mobile, occasional VPN
+                    if r < 0.12:
+                        target_vpn = True
+                elif obfuscation_level == 1:
+                    # Level 1: 50% VPN, 10% Tor, 40% standard
+                    if r < 0.50:
+                        target_vpn = True
+                    elif r < 0.60:
+                        target_tor = True
+                elif obfuscation_level == 2:
+                    # Level 2: 60% VPN/hosting, 25% Tor, 15% standard
+                    if r < 0.60:
+                        target_vpn = True
+                    elif r < 0.85:
+                        target_tor = True
+                else:
+                    # Level 3: 50% Tor, 40% VPN/hosting, 10% standard
+                    if r < 0.50:
+                        target_tor = True
+                    elif r < 0.90:
+                        target_vpn = True
             else:
-                net = self.rng.choice(NETWORK_POOL)
+                # Legit entity archetypes
+                if archetype in ("exchange_hot", "exchange_cold"):
+                    # Exchanges run on cloud hosting (AWS, Google, Hetzner, etc.)
+                    target_hosting = True
+                elif archetype == "custodial":
+                    if r < 0.75:
+                        target_hosting = True
+                    elif r < 0.90:
+                        target_vpn = True
+                elif archetype == "merchant":
+                    if r < 0.35:
+                        target_hosting = True
+                    elif r < 0.55:
+                        target_vpn = True
+                elif archetype == "gambling":
+                    if r < 0.40:
+                        target_hosting = True
+                    elif r < 0.70:
+                        target_vpn = True
+                elif archetype == "mining_pool":
+                    if r < 0.70:
+                        target_hosting = True
+                elif archetype == "retail":
+                    # Retail crypto users frequently use VPNs or privacy tools!
+                    if r < 0.18:
+                        target_vpn = True
+                    elif r < 0.22:
+                        target_tor = True
+
+        # Filter prefixes based on resolved category
+        if target_tor:
+            candidates = [p for p in MMDB_PREFIXES if p["is_tor"]]
+        elif target_vpn:
+            candidates = [p for p in MMDB_PREFIXES if p["is_vpn"]]
+        elif target_hosting:
+            candidates = [p for p in MMDB_PREFIXES if p["is_hosting"]]
+        elif country_hint:
+            candidates = [p for p in MMDB_PREFIXES if p["country"] == country_hint]
+            if not candidates:
+                candidates = [p for p in MMDB_PREFIXES if not p["is_tor"]]
         else:
-            net = self.rng.choice(NETWORK_POOL)
+            candidates = [p for p in MMDB_PREFIXES if not p["is_tor"] and not p["is_vpn"]]
 
-        ip = self._sample_ip(net)
-        self._ip_to_network[ip] = net
-        return ip, net
+        if not candidates:
+            candidates = MMDB_PREFIXES
 
-    def allocate_multiple_ips(self, count: int, country_hint: str | None = None,
-                              use_vpn: bool = False) -> list[tuple[str, NetworkInfo]]:
+        selected_prefix = self.rng.choice(candidates)
+        ip = self._sample_ip_from_prefix(selected_prefix["prefix"])
+        net_info = self._lookup_and_cache(ip)
+        return ip, net_info
+
+    def allocate_multiple_ips(
+        self,
+        count: int,
+        country_hint: str | None = None,
+        use_vpn: bool | None = None,
+        is_illicit: bool = False,
+        obfuscation_level: int = 0,
+        archetype: str | None = None,
+    ) -> list[tuple[str, NetworkInfo]]:
         """Allocate multiple IPs for an entity with IP rotation."""
-        results = []
-        for _ in range(count):
-            results.append(self.allocate_entity_ip(country_hint=country_hint, use_vpn=use_vpn))
-        return results
+        return [
+            self.allocate_entity_ip(
+                country_hint=country_hint,
+                use_vpn=use_vpn,
+                is_illicit=is_illicit,
+                obfuscation_level=obfuscation_level,
+                archetype=archetype,
+            )
+            for _ in range(count)
+        ]
 
     def simulate_relay(
         self,
@@ -297,75 +362,77 @@ class NetworkSimulator:
         relay_mean_delay: float = 2.0,
         gossip_mean_delay: float = 5.0,
     ) -> list[dict]:
-        """Simulate P2P relay propagation from an origin node.
+        """Simulate P2P relay propagation from an origin node using Poisson trickling.
 
         Returns a list of observations as seen by sensor nodes.
-        Each observation has: timestamp, src_ip (relay that sent it),
-        dst_ip (sensor), src_port, dst_port.
+        Each observation contains:
+        - sensor_id: ID of the observing sensor (sensor_0, sensor_1, ...)
+        - timestamp: arrival timestamp at sensor
+        - src_ip: IP of the peer that delivered the INV/tx to the sensor
+        - dst_ip: IP of the sensor node
+        - src_port: ephemeral source port
+        - dst_port: destination port (8333)
         """
         observations = []
 
-        # The origin broadcasts to some relay nodes
-        n_direct_relays = min(8, self.n_relay_nodes)  # Bitcoin Core: 8 outbound
+        # Number of outbound connections from origin (Bitcoin Core: 8)
+        n_direct_relays = min(8, self.n_relay_nodes)
+        direct_indices = self.rng.choice(len(self.relay_ips), size=n_direct_relays, replace=False)
 
-        # Pick which relay nodes see it first (nearest peers of origin)
-        direct_relay_indices = self.rng.choice(
-            len(self.relay_ips), size=n_direct_relays, replace=False
-        )
-
-        # Relay delays (exponential, ~2s mean for direct, ~5s for gossip)
-        relay_arrival_times: dict[str, float] = {}
-        relay_arrival_times[origin_ip] = origin_ts
-
-        for idx in direct_relay_indices:
-            delay = self.rng.exponential(relay_mean_delay)
+        # Poisson trickling from origin
+        relay_arrival_times: dict[str, float] = {origin_ip: origin_ts}
+        for idx in direct_indices:
+            # Poisson arrival interval
+            delay = float(self.rng.exponential(relay_mean_delay))
             relay_ip = self.relay_ips[idx]
             relay_arrival_times[relay_ip] = origin_ts + delay
 
-        # Gossip: some more relays see it through gossip
-        n_gossip = min(30, self.n_relay_nodes)
-        gossip_indices = self.rng.choice(
-            len(self.relay_ips), size=n_gossip, replace=True
-        )
+        # Gossip diffusion to secondary peers
+        n_gossip = min(35, self.n_relay_nodes)
+        gossip_indices = self.rng.choice(len(self.relay_ips), size=n_gossip, replace=True)
         for idx in gossip_indices:
             relay_ip = self.relay_ips[idx]
             if relay_ip not in relay_arrival_times:
-                delay = self.rng.exponential(gossip_mean_delay) + self.rng.exponential(relay_mean_delay)
-                relay_arrival_times[relay_ip] = origin_ts + delay
+                hop_delay = float(self.rng.exponential(gossip_mean_delay)) + float(self.rng.exponential(relay_mean_delay))
+                relay_arrival_times[relay_ip] = origin_ts + hop_delay
 
-        # Sensors observe from relay nodes
-        for sensor_ip in self.sensor_ips:
-            # Each sensor connects to ~8 relays
-            n_sensor_peers = min(8, len(relay_arrival_times))
-            sensor_peer_ips = self.rng.choice(
-                list(relay_arrival_times.keys()),
-                size=n_sensor_peers,
-                replace=False,
-            )
+        # Probability of direct sensor peering with origin (e.g. 20%)
+        sensor_direct_peered = self.rng.random() < 0.20
+        direct_sensor_idx = int(self.rng.integers(0, len(self.sensor_ids))) if sensor_direct_peered else -1
 
-            # Sensor sees from the relay that had it earliest + network jitter
-            best_time = float("inf")
-            best_relay = sensor_peer_ips[0]
-            for relay_ip in sensor_peer_ips:
-                arrival = relay_arrival_times[relay_ip]
-                jitter = self.rng.exponential(0.5)  # ~500ms network jitter
-                obs_time = arrival + jitter
-                if obs_time < best_time:
-                    best_time = obs_time
-                    best_relay = relay_ip
+        # Each sensor node observes via its peer connections
+        for idx, (sensor_id, sensor_ip) in enumerate(zip(self.sensor_ids, self.sensor_ips)):
+            if idx == direct_sensor_idx:
+                # Sensor directly peered with the origin!
+                jitter = float(self.rng.exponential(0.15))
+                obs_time = origin_ts + jitter
+                src_ip = origin_ip
+            else:
+                # Sensor connects to random relays from active set
+                n_peers = min(8, len(relay_arrival_times))
+                peer_relays = self.rng.choice(list(relay_arrival_times.keys()), size=n_peers, replace=False)
 
-            # Produce observation
+                best_time = float("inf")
+                best_relay = str(peer_relays[0])
+                for r_ip in peer_relays:
+                    arrival = relay_arrival_times[r_ip]
+                    jitter = float(self.rng.exponential(0.40))  # ~400ms network jitter
+                    t = arrival + jitter
+                    if t < best_time:
+                        best_time = t
+                        best_relay = r_ip
+
+                obs_time = best_time
+                src_ip = best_relay
+
             src_port = int(self.rng.integers(1024, 65535))
             observations.append({
-                "timestamp": best_time,
-                "src_ip": best_relay,
+                "sensor_id": sensor_id,
+                "timestamp": round(obs_time, 4),
+                "src_ip": src_ip,
                 "dst_ip": sensor_ip,
                 "src_port": src_port,
-                "dst_port": 8333,  # Bitcoin P2P default
+                "dst_port": 8333,
             })
 
         return observations
-
-    def get_network_info(self, ip: str) -> NetworkInfo | None:
-        """Look up network info for an IP."""
-        return self._ip_to_network.get(ip)

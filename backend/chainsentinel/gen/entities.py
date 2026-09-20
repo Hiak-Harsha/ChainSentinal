@@ -51,9 +51,11 @@ class Entity:
     typology: str | None = None
     scenario_id: str | None = None
     obfuscation_level: int = 0
+    role: str = ""
 
     # Addresses owned by this entity
     addresses: list[tuple[str, str]] = field(default_factory=list)  # (addr, script_type)
+    address_roles: dict[str, str] = field(default_factory=dict)  # addr -> role
 
     # Operator IPs
     operator_ips: list[str] = field(default_factory=list)
@@ -74,11 +76,20 @@ class Entity:
     true_cluster_id: str | None = None  # For ground truth
     transactions: list[str] = field(default_factory=list)  # txids
 
+    def add_address(self, addr: str, script_type: str = "p2wpkh", role: str | None = None) -> tuple[str, str]:
+        """Register a new address with an assigned role."""
+        pair = (addr, script_type)
+        if pair not in self.addresses:
+            self.addresses.append(pair)
+        self.address_roles[addr] = role or self.role or self.entity_type.value
+        return pair
+
     def to_ground_truth(self) -> dict[str, Any]:
-        """Serialize for ground truth output."""
+        """Serialize for entity ground truth output."""
         return {
             "entity_id": self.entity_id,
-            "type": "illicit" if self.is_illicit else "legit",
+            "role": self.role or self.entity_type.value,
+            "type": "illicit" if self.is_illicit else ("victim" if self.role == "victim" else "legit"),
             "archetype": self.entity_type.value,
             "typology": self.typology,
             "scenario_id": self.scenario_id,
@@ -87,6 +98,24 @@ class Entity:
             "operator_ips": self.operator_ips,
             "true_cluster": self.true_cluster_id,
         }
+
+    def get_address_ground_truth(self) -> dict[str, dict[str, Any]]:
+        """Return ground truth records for all addresses belonging to this entity."""
+        res: dict[str, dict[str, Any]] = {}
+        for addr, _ in self.addresses:
+            res[addr] = {
+                "address": addr,
+                "entity_id": self.entity_id,
+                "true_cluster": self.true_cluster_id,
+                "role": self.address_roles.get(addr, self.role or self.entity_type.value),
+                "type": "illicit" if self.is_illicit else ("victim" if self.role == "victim" else "legit"),
+                "archetype": self.entity_type.value,
+                "typology": self.typology,
+                "scenario_id": self.scenario_id,
+                "operator_ips": self.operator_ips,
+                "obfuscation_level": self.obfuscation_level,
+            }
+        return res
 
 
 class EntityPopulation:
@@ -121,11 +150,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(1, 4))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="retail", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.RETAIL,
+                role="retail_user",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -138,6 +168,8 @@ class EntityPopulation:
                 weekend_ratio=float(self.rng.uniform(0.1, 0.5)),
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "retail_user"
             entities.append(entity)
         return entities
 
@@ -154,11 +186,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(5, 21))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="merchant", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.MERCHANT,
+                role="merchant",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -171,6 +204,8 @@ class EntityPopulation:
                 weekend_ratio=0.2,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "merchant_deposit"
             entities.append(entity)
         return entities
 
@@ -187,12 +222,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(20, 101))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            # Exchanges use hosting/cloud IPs
-            ip, net = self.network.allocate_entity_ip(country_hint="US")
+            ip, net = self.network.allocate_entity_ip(archetype="exchange_hot", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.EXCHANGE_HOT,
+                role="exchange_hot",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -202,9 +237,11 @@ class EntityPopulation:
                 amount_mean=int(self.rng.integers(1_000_000, 100_000_000)),
                 amount_std=int(self.rng.integers(500_000, 50_000_000)),
                 active_hours=(0, 24),
-                weekend_ratio=0.9,  # Always active
+                weekend_ratio=0.9,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "exchange_hot"
             entities.append(entity)
         return entities
 
@@ -221,11 +258,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(2, 6))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="exchange_cold", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.EXCHANGE_COLD,
+                role="exchange_cold",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -238,6 +276,8 @@ class EntityPopulation:
                 weekend_ratio=0.5,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "exchange_cold"
             entities.append(entity)
         return entities
 
@@ -254,11 +294,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(3, 11))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="payroll", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.PAYROLL,
+                role="payroll_sender",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -266,11 +307,13 @@ class EntityPopulation:
                 asn_org=net.asn_org,
                 tx_rate_per_day=float(self.rng.uniform(0.1, 2.0)),
                 amount_mean=int(self.rng.integers(500_000, 5_000_000)),
-                amount_std=int(self.rng.integers(50_000, 500_000)),  # Low variance
+                amount_std=int(self.rng.integers(50_000, 500_000)),
                 active_hours=(8, 18),
                 weekend_ratio=0.05,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "payroll_sender"
             entities.append(entity)
         return entities
 
@@ -286,11 +329,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(5, 16))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="mining_pool", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.MINING_POOL,
+                role="mining_pool",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -303,6 +347,8 @@ class EntityPopulation:
                 weekend_ratio=0.95,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "mining_pool"
             entities.append(entity)
         return entities
 
@@ -319,11 +365,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(5, 21))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="gambling", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.GAMBLING,
+                role="gambling_house",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -336,6 +383,8 @@ class EntityPopulation:
                 weekend_ratio=0.8,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "gambling_house"
             entities.append(entity)
         return entities
 
@@ -351,11 +400,12 @@ class EntityPopulation:
 
             n_addrs = int(self.rng.integers(3, 16))
             addrs = self.addr_gen.generate_batch(n_addrs)
-            ip, net = self.network.allocate_entity_ip()
+            ip, net = self.network.allocate_entity_ip(archetype="custodial", is_illicit=False)
 
             entity = Entity(
                 entity_id=eid,
                 entity_type=EntityType.CUSTODIAL,
+                role="custodial_service",
                 addresses=addrs,
                 operator_ips=[ip],
                 country=net.country,
@@ -368,6 +418,8 @@ class EntityPopulation:
                 weekend_ratio=0.7,
                 true_cluster_id=cid,
             )
+            for a, _ in addrs:
+                entity.address_roles[a] = "custodial_service"
             entities.append(entity)
         return entities
 

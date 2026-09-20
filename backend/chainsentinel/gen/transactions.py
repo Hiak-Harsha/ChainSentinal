@@ -381,3 +381,160 @@ class TransactionBuilder:
             fee=fee,
         )
 
+    def build_retail_cospend(
+        self,
+        timestamp: float,
+        inputs: list[tuple[str, str, int]],
+        dest_addr: tuple[str, str],
+        payment_amount: int,
+        change_addr: tuple[str, str],
+    ) -> Transaction:
+        """Retail multi-input co-spend across own addresses with change output."""
+        total_in = sum(amt for _, _, amt in inputs)
+        n_in = len(inputs)
+        n_out = 2
+        vsize = 10 + n_in * 68 + n_out * 34
+        fee = max(200, int(self.rng.uniform(10, 30) * vsize))
+
+        if payment_amount + fee >= total_in:
+            payment_amount = max(1000, total_in - fee - DUST_LIMIT)
+
+        change_amount = total_in - payment_amount - fee
+        output_addrs = [dest_addr]
+        output_amts = [payment_amount]
+
+        if change_amount >= DUST_LIMIT:
+            output_addrs.append(change_addr)
+            output_amts.append(change_amount)
+        else:
+            fee += change_amount
+
+        return self.build_simple(
+            timestamp=timestamp,
+            input_addresses=[(a, s) for a, s, _ in inputs],
+            input_amounts=[amt for _, _, amt in inputs],
+            output_addresses=output_addrs,
+            output_amounts=output_amts,
+            fee=fee,
+        )
+
+    def build_merchant_sweep(
+        self,
+        timestamp: float,
+        inputs: list[tuple[str, str, int]],
+        dest_addrs: list[tuple[str, str]],
+    ) -> Transaction:
+        """Merchant consolidation sweep: many small inputs -> 1-2 outputs."""
+        total_in = sum(amt for _, _, amt in inputs)
+        vsize = 10 + len(inputs) * 68 + len(dest_addrs) * 34
+        fee = max(200, int(self.rng.uniform(12, 25) * vsize))
+        total_out = total_in - fee
+        output_amounts = partition_amount(self.rng, total_out, len(dest_addrs), min_per_item=DUST_LIMIT)
+
+        return self.build_simple(
+            timestamp=timestamp,
+            input_addresses=[(a, s) for a, s, _ in inputs],
+            input_amounts=[amt for _, _, amt in inputs],
+            output_addresses=dest_addrs,
+            output_amounts=output_amounts,
+            fee=fee,
+        )
+
+    def build_exchange_batch(
+        self,
+        timestamp: float,
+        inputs: list[tuple[str, str, int]],
+        customer_addrs: list[tuple[str, str]],
+        change_addr: tuple[str, str] | None = None,
+    ) -> Transaction:
+        """Exchange batched customer withdrawals: 1-4 inputs -> 20-200 outputs."""
+        total_in = sum(amt for _, _, amt in inputs)
+        n_out = len(customer_addrs) + (1 if change_addr else 0)
+        vsize = 10 + len(inputs) * 68 + n_out * 34
+        fee = max(500, int(self.rng.uniform(15, 35) * vsize))
+
+        total_avail = max(len(customer_addrs) * DUST_LIMIT, total_in - fee)
+        customer_amounts = partition_amount(self.rng, int(total_avail * 0.70), len(customer_addrs), min_per_item=DUST_LIMIT)
+
+        output_addrs = list(customer_addrs)
+        output_amounts = list(customer_amounts)
+
+        if change_addr:
+            change_amt = total_in - sum(customer_amounts) - fee
+            if change_amt >= DUST_LIMIT:
+                output_addrs.append(change_addr)
+                output_amounts.append(change_amt)
+            else:
+                fee += change_amt
+
+        return self.build_simple(
+            timestamp=timestamp,
+            input_addresses=[(a, s) for a, s, _ in inputs],
+            input_amounts=[amt for _, _, amt in inputs],
+            output_addresses=output_addrs,
+            output_amounts=output_amounts,
+            fee=fee,
+        )
+
+    def build_payroll_batch(
+        self,
+        timestamp: float,
+        inputs: list[tuple[str, str, int]],
+        employee_addrs: list[tuple[str, str]],
+        salary_base: int,
+        change_addr: tuple[str, str],
+    ) -> Transaction:
+        """Payroll one-to-many batched salaries with low variance."""
+        salaries = []
+        for _ in employee_addrs:
+            variation = int(self.rng.normal(0, salary_base * 0.05))
+            salaries.append(max(DUST_LIMIT, salary_base + variation))
+
+        total_salaries = sum(salaries)
+        vsize = 10 + len(inputs) * 68 + (len(employee_addrs) + 1) * 34
+        fee = max(300, int(self.rng.uniform(10, 20) * vsize))
+        total_in = sum(amt for _, _, amt in inputs)
+
+        change_amt = total_in - total_salaries - fee
+        if change_amt < DUST_LIMIT:
+            needed = total_salaries + fee + DUST_LIMIT
+            inputs = [(inputs[0][0], inputs[0][1], needed)]
+            change_amt = DUST_LIMIT
+
+        output_addrs = list(employee_addrs) + [change_addr]
+        output_amounts = salaries + [change_amt]
+
+        return self.build_simple(
+            timestamp=timestamp,
+            input_addresses=[(a, s) for a, s, _ in inputs],
+            input_amounts=[amt for _, _, amt in inputs],
+            output_addresses=output_addrs,
+            output_amounts=output_amounts,
+            fee=fee,
+        )
+
+    def build_mining_payout(
+        self,
+        timestamp: float,
+        coinbase_input: tuple[str, str, int],
+        miner_addrs: list[tuple[str, str]],
+        pool_fee_addr: tuple[str, str],
+    ) -> Transaction:
+        """Mining pool payout: coinbase/pool reward -> multiple miners + pool fee."""
+        reward = coinbase_input[2]
+        pool_fee = int(reward * 0.02)
+        miner_pot = max(len(miner_addrs) * DUST_LIMIT, reward - pool_fee - 1000)
+
+        miner_payouts = partition_amount(self.rng, miner_pot, len(miner_addrs), min_per_item=DUST_LIMIT)
+        output_addrs = list(miner_addrs) + [pool_fee_addr]
+        output_amounts = list(miner_payouts) + [pool_fee]
+
+        return self.build_simple(
+            timestamp=timestamp,
+            input_addresses=[(coinbase_input[0], coinbase_input[1])],
+            input_amounts=[reward],
+            output_addresses=output_addrs,
+            output_amounts=output_amounts,
+            fee=1000,
+        )
+

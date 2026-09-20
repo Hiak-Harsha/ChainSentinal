@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+PRESETS: dict[str, int] = {
+    "50k": 50_000,
+    "500k": 500_000,
+    "2m": 2_000_000,
+}
 
 
 @dataclass
 class GeneratorConfig:
-    """Configuration for the synthetic data generator.
+    """Configuration for the synthetic data generator v2.
 
     All parameters that control data generation are centralized here
     for reproducibility. The config is serialized alongside output.
@@ -18,6 +24,10 @@ class GeneratorConfig:
 
     seed: int = 42
     total_tx: int = 100_000
+    preset: str | None = None
+
+    # Strict invariant: legit traffic share must be at least 90% and never zero
+    min_legit_ratio: float = 0.90
 
     # Entity population (counts are scaled relative to total_tx)
     n_retail_users: int = 300
@@ -59,10 +69,18 @@ class GeneratorConfig:
     output_dir: str = "data/generated"
     formats: list[str] = field(default_factory=lambda: ["csv", "json", "xml"])
 
+    def __post_init__(self) -> None:
+        if self.preset:
+            norm = self.preset.lower().strip()
+            if norm in PRESETS:
+                self.total_tx = PRESETS[norm]
+            else:
+                raise ValueError(f"Unknown preset '{self.preset}'. Supported: {list(PRESETS.keys())}")
+
     @property
     def illicit_ratio(self) -> float:
         """Approximate ratio of illicit transactions."""
-        return 0.08
+        return 1.0 - self.min_legit_ratio
 
     @property
     def time_range_s(self) -> int:

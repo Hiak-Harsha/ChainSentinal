@@ -1,15 +1,13 @@
-"""Serializers — write observation data to CSV, JSON (NDJSON), and XML.
+"""Serializers — write observation data to CSV, JSON (array AND NDJSON), and XML.
 
-All three formats contain identical logical data so they can be ingested
-interchangeably during testing and demo.
+All formats contain identical logical data so they can be ingested
+interchangeably during testing and forensics.
 """
 
 from __future__ import annotations
 
 import csv
-import io
 import json
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +21,8 @@ def _flatten_observation(obs: dict[str, Any]) -> dict[str, Any]:
     for key, value in obs.items():
         if isinstance(value, list):
             flat[key] = ";".join(str(v) for v in value)
+        elif value is None:
+            flat[key] = ""
         else:
             flat[key] = value
     return flat
@@ -33,13 +33,11 @@ def write_csv(observations: list[dict[str, Any]], path: Path) -> None:
 
     Arrays are encoded as semicolon-separated strings.
     """
+    path.parent.mkdir(parents=True, exist_ok=True)
     if not observations:
-        path.write_text("")
+        path.write_text("", encoding="utf-8")
         return
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Get all field names
     fieldnames = list(observations[0].keys())
 
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -49,17 +47,34 @@ def write_csv(observations: list[dict[str, Any]], path: Path) -> None:
             writer.writerow(_flatten_observation(obs))
 
 
-def write_json(observations: list[dict[str, Any]], path: Path) -> None:
-    """Write observations to NDJSON (newline-delimited JSON) file.
+def write_json(observations: list[dict[str, Any]], path: Path, as_array: bool = True) -> None:
+    """Write observations to JSON file (array or NDJSON).
 
-    Arrays remain as native JSON arrays.
+    Default writes as a JSON array: [ {...}, {...} ]
     """
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w", encoding="utf-8") as f:
-        for obs in observations:
-            f.write(json.dumps(obs, ensure_ascii=False, default=str))
-            f.write("\n")
+        if as_array:
+            f.write("[\n")
+            total = len(observations)
+            for idx, obs in enumerate(observations):
+                f.write("  ")
+                f.write(json.dumps(obs, ensure_ascii=False, default=str))
+                if idx < total - 1:
+                    f.write(",\n")
+                else:
+                    f.write("\n")
+            f.write("]\n")
+        else:
+            for obs in observations:
+                f.write(json.dumps(obs, ensure_ascii=False, default=str))
+                f.write("\n")
+
+
+def write_ndjson(observations: list[dict[str, Any]], path: Path) -> None:
+    """Write observations to NDJSON (newline-delimited JSON) file."""
+    write_json(observations, path, as_array=False)
 
 
 def write_xml(observations: list[dict[str, Any]], path: Path) -> None:
@@ -70,7 +85,6 @@ def write_xml(observations: list[dict[str, Any]], path: Path) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Stream-write to avoid building full tree in memory
     with open(path, "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write("<observations>\n")
@@ -83,6 +97,8 @@ def write_xml(observations: list[dict[str, Any]], path: Path) -> None:
                     for item in value:
                         f.write(f"      <item>{_xml_escape(str(item))}</item>\n")
                     f.write(f"    </{key}>\n")
+                elif value is None:
+                    f.write(f"    <{key}></{key}>\n")
                 else:
                     f.write(f"    <{key}>{_xml_escape(str(value))}</{key}>\n")
             f.write("  </observation>\n")

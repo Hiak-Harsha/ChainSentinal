@@ -17,6 +17,7 @@ def cli(ctx: click.Context, seed: int) -> None:
 
 @cli.command()
 @click.option("--tx", "tx_count", default=100_000, type=int, help="Number of transactions to generate.")
+@click.option("--preset", default=None, type=click.Choice(["50k", "500k", "2m"], case_sensitive=False), help="Standard dataset preset (50k, 500k, 2m).")
 @click.option("--seed", "seed_opt", default=None, type=int, help="Seed for generation (defaults to global seed).")
 @click.option("--output", "-o", default="data/generated", help="Output directory.")
 @click.option(
@@ -25,10 +26,14 @@ def cli(ctx: click.Context, seed: int) -> None:
     help="Comma-separated output formats (csv, json, xml).",
 )
 @click.pass_context
-def generate(ctx: click.Context, tx_count: int, seed_opt: int | None, output: str, formats: str) -> None:
+def generate(ctx: click.Context, tx_count: int, preset: str | None, seed_opt: int | None, output: str, formats: str) -> None:
     """Generate synthetic Bitcoin transaction data with ground truth."""
     seed = seed_opt if seed_opt is not None else ctx.obj.get("seed", 42)
     fmt_list = [f.strip().lower() for f in formats.split(",")]
+    if preset:
+        from chainsentinel.gen.config import PRESETS
+        tx_count = PRESETS[preset.lower()]
+        click.echo(f"Using preset '{preset}': target {tx_count:,} transactions")
     click.echo(f"Generating {tx_count:,} transactions (seed={seed}) -> {output}")
     click.echo(f"Formats: {', '.join(fmt_list)}")
 
@@ -39,6 +44,7 @@ def generate(ctx: click.Context, tx_count: int, seed_opt: int | None, output: st
         seed=seed,
         output_dir=output,
         formats=fmt_list,
+        preset=preset,
     )
 
 

@@ -24,9 +24,18 @@ from chainsentinel.ingest.schema_mapper import SchemaMapper
 from chainsentinel.ingest.validator import QuarantineReason, RecordValidator
 from chainsentinel.storage.db import DatabaseManager
 
-TEST_CSV = "data/cli_test/observations.csv"
-TEST_JSON = "data/cli_test/observations.json"
-TEST_XML = "data/cli_test/observations.xml"
+TEST_CSV = "data/samples/observations.csv"
+TEST_JSON = "data/samples/observations.json"
+TEST_XML = "data/samples/observations.xml"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_sample_data():
+    csv_p = Path(TEST_CSV)
+    if not csv_p.exists() or csv_p.stat().st_size == 0:
+        from chainsentinel.gen.generator import Generator
+        gen = Generator(target_txs=10, seed=42)
+        gen.run(output_dir=str(csv_p.parent), formats=["csv", "json", "xml"])
 
 
 class TestMultiFormatIngestion:

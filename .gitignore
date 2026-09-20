@@ -53,10 +53,18 @@ backend/data/models/*
 !backend/data/models/.gitkeep
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
+data/models/*
+!data/models/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+data/samples/*
+!data/samples/.gitkeep
 backend/data/parquet_export/
 backend/data/test_*
+data/test_*
 data/test_output/
 data/test_output_2/
+prompt_dump.md
 scratch/
 scratch_*
 

@@ -1,29 +1,36 @@
-"""Network layer metadata enrichment: GeoIP, ASN, Organization, and Anonymizer flags."""
+"""Network layer metadata enrichment: GeoIP, ASN, Organization, and Anonymizer flags.
+
+Queries vendored MaxMind DB (.mmdb) file offline.
+Shares ONLY the .mmdb database with the generator, never a Python table.
+"""
 
 from __future__ import annotations
 
-import bisect
 from dataclasses import dataclass
-import socket
-import struct
+from pathlib import Path
 from typing import Any
+import maxminddb
 
-from chainsentinel.gen.network import NETWORK_POOL, NetworkInfo
 
-
-def _ip_to_int(ip: str) -> int:
-    """Convert dotted IPv4 string to integer."""
-    try:
-        return struct.unpack("!I", socket.inet_aton(ip.strip()))[0]
-    except Exception:
-        return 0
+def find_geoip_db_path() -> Path:
+    """Locate vendored GeoIP MMDB database."""
+    base_dir = Path(__file__).resolve().parent.parent
+    candidates = [
+        base_dir / "data" / "geoip" / "dbip-country-asn-lite.mmdb",
+        Path("backend/chainsentinel/data/geoip/dbip-country-asn-lite.mmdb"),
+        Path("data/geoip/dbip-country-asn-lite.mmdb"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.resolve()
+    raise FileNotFoundError(f"Vendored GeoIP MMDB file not found. Looked in: {[str(c) for c in candidates]}")
 
 
 @dataclass(frozen=True)
 class EnrichmentResult:
-    country: str
-    asn: str
-    asn_org: str
+    country: str | None
+    asn: str | None
+    asn_org: str | None
     is_anonymizer: bool
     is_tor: bool
     is_vpn: bool
@@ -31,47 +38,61 @@ class EnrichmentResult:
 
 
 class GeoIpEnricher:
-    """Fast in-memory IP metadata resolver using real-world ASN ranges and anonymizer lists."""
+    """Fast offline IP metadata resolver backed by vendored MaxMind DB."""
 
-    def __init__(self, networks: list[NetworkInfo] | None = None):
-        self.networks = sorted(networks or NETWORK_POOL, key=lambda n: n.ip_start)
-        self._starts = [n.ip_start for n in self.networks]
+    def __init__(self, mmdb_path: Path | None = None):
+        self.db_path = mmdb_path or find_geoip_db_path()
+        self._reader = maxminddb.open_database(str(self.db_path))
+
+    def close(self) -> None:
+        """Close MMDB reader."""
+        if hasattr(self, "_reader") and self._reader:
+            self._reader.close()
 
     def lookup(self, ip_str: str) -> EnrichmentResult:
         """Resolve IP address to country, ASN, ISP, and anonymizer flags."""
-        ip_int = _ip_to_int(ip_str)
-        if ip_int == 0:
+        ip = (ip_str or "").strip()
+        if not ip:
             return EnrichmentResult(
-                country="UNKNOWN",
-                asn="UNKNOWN",
-                asn_org="Unknown",
+                country=None,
+                asn=None,
+                asn_org=None,
                 is_anonymizer=False,
                 is_tor=False,
                 is_vpn=False,
                 is_hosting=False,
             )
 
-        # Binary search for matching range
-        idx = bisect.bisect_right(self._starts, ip_int) - 1
-        if 0 <= idx < len(self.networks):
-            net = self.networks[idx]
-            if net.ip_start <= ip_int <= net.ip_end:
-                is_anon = net.is_tor or net.is_vpn or net.is_hosting
-                return EnrichmentResult(
-                    country=net.country,
-                    asn=f"AS{net.asn}",
-                    asn_org=net.asn_org,
-                    is_anonymizer=is_anon,
-                    is_tor=net.is_tor,
-                    is_vpn=net.is_vpn,
-                    is_hosting=net.is_hosting,
-                )
+        try:
+            rec = self._reader.get(ip)
+        except Exception:
+            rec = None
 
-        # Default fallback
+        if rec:
+            country = rec.get("country", {}).get("iso_code")
+            asn_num = rec.get("autonomous_system_number")
+            asn = f"AS{asn_num}" if asn_num is not None else None
+            asn_org = rec.get("autonomous_system_organization")
+            traits = rec.get("traits", {})
+            is_tor = bool(traits.get("is_tor_exit_node", False))
+            is_vpn = bool(traits.get("is_vpn", False))
+            is_hosting = bool(traits.get("is_hosting_provider", False))
+            is_anon = is_tor or is_vpn or is_hosting
+            return EnrichmentResult(
+                country=country,
+                asn=asn,
+                asn_org=asn_org,
+                is_anonymizer=is_anon,
+                is_tor=is_tor,
+                is_vpn=is_vpn,
+                is_hosting=is_hosting,
+            )
+
+        # Missing lookup -> None (NULL), never fake "ZZ"
         return EnrichmentResult(
-            country="ZZ",
-            asn="AS0",
-            asn_org="Generic Relay Node",
+            country=None,
+            asn=None,
+            asn_org=None,
             is_anonymizer=False,
             is_tor=False,
             is_vpn=False,
@@ -80,20 +101,31 @@ class GeoIpEnricher:
 
 
 # Global default enricher instance
-_default_enricher = GeoIpEnricher()
+_default_enricher: GeoIpEnricher | None = None
+
+
+def get_default_enricher() -> GeoIpEnricher:
+    """Lazily instantiate or return default GeoIpEnricher."""
+    global _default_enricher
+    if _default_enricher is None:
+        _default_enricher = GeoIpEnricher()
+    return _default_enricher
 
 
 def enrich_record(record: dict[str, Any], enricher: GeoIpEnricher | None = None) -> dict[str, Any]:
     """Enrich observation record with geo and network metadata."""
-    res = (enricher or _default_enricher).lookup(str(record.get("src_ip", "")))
+    enr = enricher or get_default_enricher()
+    res = enr.lookup(str(record.get("src_ip", "")))
     enriched = dict(record)
+
     # Prefer existing if already populated in file, otherwise use lookup
-    if not enriched.get("src_country"):
+    if not enriched.get("src_country") and res.country:
         enriched["src_country"] = res.country
-    if not enriched.get("src_asn"):
+    if not enriched.get("src_asn") and res.asn:
         enriched["src_asn"] = res.asn
-    if not enriched.get("src_asn_org"):
+    if not enriched.get("src_asn_org") and res.asn_org:
         enriched["src_asn_org"] = res.asn_org
     if "is_anonymizer" not in enriched or enriched["is_anonymizer"] is None:
         enriched["is_anonymizer"] = res.is_anonymizer
+
     return enriched
