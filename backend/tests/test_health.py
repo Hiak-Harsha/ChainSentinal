@@ -31,6 +31,10 @@ async def test_offline_check(client):
     resp = await client.get("/api/system/offline-check")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["air_gapped"] is True
-    assert data["external_connections"] == 0
-    assert data["synthetic_data_only"] is True
+    assert "air_gapped" in data
+    assert isinstance(data["air_gapped"], bool)
+    assert "measured_at" in data
+    assert "total_sockets" in data
+    assert "non_loopback_sockets" in data
+    assert isinstance(data["non_loopback_connections"], list)
+    assert "message" in data

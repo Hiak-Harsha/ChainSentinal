@@ -16,10 +16,13 @@ from chainsentinel.storage.db import DatabaseManager
 router = APIRouter(prefix="/graph", tags=["Graph & Entity Resolution"])
 
 
+from chainsentinel.common.datasets import resolve_registered_ground_truth
+
+
 class ClusterRequest(BaseModel):
     change_threshold: float = 0.75
     min_coinjoin_outputs: int = 3
-    ground_truth_path: str | None = None
+    dataset_name: str | None = None
 
 
 def _get_db() -> DatabaseManager:
@@ -41,10 +44,12 @@ def trigger_clustering(req: ClusterRequest = ClusterRequest()) -> dict[str, Any]
         "summary": summary.to_dict(),
     }
 
-    # If ground truth path provided or default exists, calculate evaluation metrics
-    gt_file = Path(req.ground_truth_path) if req.ground_truth_path else None
-    if not gt_file and (settings.DATA_DIR / "cli_test" / "ground_truth.json").exists():
-        gt_file = settings.DATA_DIR / "cli_test" / "ground_truth.json"
+    # If dataset_name provided or default exists, calculate evaluation metrics
+    gt_file: Path | None = None
+    try:
+        gt_file = resolve_registered_ground_truth(req.dataset_name)
+    except Exception:
+        gt_file = None
 
     if gt_file and gt_file.exists():
         gt_map = ClusterEvaluator.load_ground_truth_map(gt_file)

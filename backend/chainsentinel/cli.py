@@ -523,6 +523,13 @@ def report(
     if top3 is None:
         top3 = a.get("overall", {}).get("top3_accuracy", 0.0)
 
+    from chainsentinel.eval.reporter import load_eval_targets
+    targets = load_eval_targets()
+    t_clust = targets.get("clustering", {})
+    t_attr = targets.get("attribution", {})
+    t_sup = targets.get("supervised_classification", {})
+    t_unsup = targets.get("unsupervised_holdout_experiment", {})
+
     click.echo("\n========================================================")
     click.echo("       CHAINSENTINEL FORENSIC BENCHMARK SCORECARD       ")
     click.echo("========================================================")
@@ -530,18 +537,42 @@ def report(
     click.echo(f"  Monitored Transactions:  {t.get('total_transactions', 0):,}")
     click.echo(f"  Active High-Risk Alerts: {t.get('total_alerts', 0):,}")
     click.echo("--------------------------------------------------------")
-    click.echo(f"  CIOH Pairwise Precision: {c.get('pairwise_precision', 0.0)*100:.2f}%  (Target >= 95.0%)")
-    click.echo(f"  CIOH Normalized MI (NMI):{c.get('normalized_mutual_info', 0.0):.4f}  (Target >= 0.700)")
-    click.echo(f"  IP Attribution Top-1:    {float(top1)*100:.2f}%  (Target >= 80.0%)")
-    click.echo(f"  IP Attribution Top-3:    {float(top3)*100:.2f}%  (Target >= 90.0%)")
-    click.echo(f"  Supervised Accuracy:     {s.get('accuracy', 0.0)*100:.2f}%  (Target >= 90.0%)")
-    click.echo(f"  Supervised Macro F1:     {s.get('f1_macro', 0.0):.4f}  (Target >= 0.850)")
-    click.echo(f"  Hold-out Anomaly Delta: +{h.get('anomaly_separation_delta', 0.0):.3f}  (Target >= +0.300)")
-    click.echo(f"  Hold-out Detection Rate: {h.get('flagged_as_anomalous_ratio', 0.0)*100:.2f}%  (Target >= 80.0%)")
+    
+    tgt_p = t_clust.get("pairwise_precision", {}).get("target", 0.95) * 100
+    act_p = f"{c['pairwise_precision']*100:.2f}%" if "pairwise_precision" in c else "N/A"
+    click.echo(f"  CIOH Pairwise Precision: {act_p}  (Target >= {tgt_p:.1f}%)")
+
+    tgt_nmi = t_clust.get("normalized_mutual_info", {}).get("target", 0.70)
+    act_nmi = f"{c['normalized_mutual_info']:.4f}" if "normalized_mutual_info" in c else "N/A"
+    click.echo(f"  CIOH Normalized MI (NMI):{act_nmi}  (Target >= {tgt_nmi:.3f})")
+
+    tgt_t1 = t_attr.get("overall_top1_accuracy", {}).get("target", 0.80) * 100
+    act_t1 = f"{float(top1)*100:.2f}%" if top1 is not None else "N/A"
+    click.echo(f"  IP Attribution Top-1:    {act_t1}  (Target >= {tgt_t1:.1f}%)")
+
+    tgt_t3 = t_attr.get("overall_top3_accuracy", {}).get("target", 0.90) * 100
+    act_t3 = f"{float(top3)*100:.2f}%" if top3 is not None else "N/A"
+    click.echo(f"  IP Attribution Top-3:    {act_t3}  (Target >= {tgt_t3:.1f}%)")
+
+    tgt_acc = t_sup.get("accuracy", {}).get("target", 0.90) * 100
+    act_acc = f"{s['accuracy']*100:.2f}%" if "accuracy" in s else "N/A"
+    click.echo(f"  Supervised Accuracy:     {act_acc}  (Target >= {tgt_acc:.1f}%)")
+
+    tgt_f1 = t_sup.get("f1_macro", {}).get("target", 0.85)
+    act_f1 = f"{s['f1_macro']:.4f}" if "f1_macro" in s else "N/A"
+    click.echo(f"  Supervised Macro F1:     {act_f1}  (Target >= {tgt_f1:.3f})")
+
+    tgt_sep = t_unsup.get("anomaly_separation_delta", {}).get("target", 0.30)
+    act_sep = f"+{h['anomaly_separation_delta']:.3f}" if "anomaly_separation_delta" in h else "N/A"
+    click.echo(f"  Hold-out Anomaly Delta: {act_sep}  (Target >= +{tgt_sep:.3f})")
+
+    tgt_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("target", 0.80) * 100
+    act_flag = f"{h['flagged_as_anomalous_ratio']*100:.2f}%" if "flagged_as_anomalous_ratio" in h else "N/A"
+    click.echo(f"  Hold-out Detection Rate: {act_flag}  (Target >= {tgt_flag:.1f}%)")
     click.echo("========================================================")
     click.echo(f"  [+] Evaluation Report:   {report_file}")
     click.echo(f"  [+] Sample Case Dossier: {dossier_file}")
-    click.echo("  [OK] SIH26146 Forensic Benchmarks Verified.")
+    click.echo("  [OK] SIH26146 Forensic Benchmarks Processed.")
 
 
 if __name__ == "__main__":

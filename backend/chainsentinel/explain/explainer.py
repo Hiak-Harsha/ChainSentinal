@@ -1,4 +1,4 @@
-"""Explainability engine computing TreeSHAP feature attributions, peer percentiles, and forensic narratives."""
+"""Explainability engine computing exact TreeSHAP feature attributions, peer percentiles, and forensic narratives."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ FEATURE_DESCRIPTIONS: dict[str, str] = {
 
 
 class ForensicExplainer:
-    """Computes TreeSHAP attributions, population peer percentiles, and natural language reasons."""
+    """Computes exact TreeSHAP attributions, population peer percentiles, and natural language reasons."""
 
     def __init__(
         self,
@@ -43,8 +43,7 @@ class ForensicExplainer:
         self.supervised_model = supervised_model
         self.feature_names = feature_names or list(FEATURE_NAMES)
         self.population_matrix = self._to_array(population_features)
-        self._tree_explainer = None
-        self._init_shap_explainer()
+        self._init_population_stats()
 
     def _to_array(self, X: np.ndarray | list[dict[str, float]]) -> np.ndarray:
         if isinstance(X, np.ndarray):
@@ -56,18 +55,17 @@ class ForensicExplainer:
                 arr[i, j] = float(val) if val is not None and not np.isnan(val) and not np.isinf(val) else 0.0
         return arr
 
-    def _init_shap_explainer(self) -> None:
-        """Initialize explainer cache for population statistics."""
+    def _init_population_stats(self) -> None:
+        """Initialize empirical population distributions for peer percentile rankings."""
         if len(self.population_matrix) > 0:
             self.mean_vector = np.mean(self.population_matrix, axis=0)
             self.std_vector = np.std(self.population_matrix, axis=0)
         else:
             self.mean_vector = np.zeros(len(self.feature_names), dtype=np.float32)
             self.std_vector = np.ones(len(self.feature_names), dtype=np.float32)
-        self._tree_explainer = None
 
     def compute_peer_percentiles(self, feature_dict: dict[str, float]) -> dict[str, float]:
-        """Compute the empirical percentile rank (0.0 to 100.0) for each feature against the population."""
+        """Compute empirical percentile rank (0.0 to 100.0) for each feature against the population."""
         if len(self.population_matrix) == 0:
             return {k: 50.0 for k in feature_dict}
 
@@ -84,19 +82,28 @@ class ForensicExplainer:
         self,
         feature_dict: dict[str, float],
         target_class_idx: int | None = None,
-    ) -> dict[str, float]:
-        """Compute feature contribution SHAP values towards the predicted class using tree-margin attribution."""
-        importances = getattr(self.supervised_model, "feature_importances_", {})
-        shap_approx = {}
-        for j, fn in enumerate(self.feature_names):
-            val = float(feature_dict.get(fn, 0.0))
-            mu = float(self.mean_vector[j])
-            sigma = max(1e-4, float(self.std_vector[j]))
-            z_score = (val - mu) / sigma
-            weight = importances.get(fn, 1.0 / len(self.feature_names))
-            shap_approx[fn] = float(np.tanh(z_score * 0.5) * weight * 2.0)
+    ) -> tuple[dict[str, float], float]:
+        """Compute exact TreeSHAP feature contributions and base value towards target class margin.
+        
+        Guarantees exact TreeSHAP efficiency/additivity property:
+            sum(shap_values.values()) + base_value == model_margin
+            
+        Returns:
+            (shap_dict, base_margin_value)
+        """
+        if hasattr(self.supervised_model, "predict_contribs") and getattr(self.supervised_model, "is_fitted", False):
+            feat_contribs, base_vals = self.supervised_model.predict_contribs(
+                [feature_dict], class_idx=target_class_idx
+            )
+            shap_dict = {
+                fn: float(feat_contribs[0, j]) for j, fn in enumerate(self.feature_names)
+            }
+            base_val = float(base_vals[0])
+            return shap_dict, base_val
 
-        return shap_approx
+        # If model is not fitted or doesn't support TreeSHAP, return zeros with neutral base
+        shap_dict = {fn: 0.0 for fn in self.feature_names}
+        return shap_dict, 0.0
 
     def explain_entity(
         self,
@@ -106,12 +113,12 @@ class ForensicExplainer:
         class_prob: float,
         top_n: int = 4,
     ) -> list[dict[str, Any]]:
-        """Generate formatted reasons strictly complying with the Section 7 API contract."""
+        """Generate explainable forensic drivers strictly complying with API schema and Truth-First rules."""
         class_idx = 0
         if hasattr(self.supervised_model, "classes_") and predicted_class in self.supervised_model.classes_:
             class_idx = self.supervised_model.classes_.index(predicted_class)
 
-        shap_vals = self.compute_shap_values(feature_dict, class_idx)
+        shap_vals, base_margin = self.compute_shap_values(feature_dict, class_idx)
         percentiles = self.compute_peer_percentiles(feature_dict)
 
         # Sort features by absolute SHAP contribution
@@ -143,7 +150,7 @@ class ForensicExplainer:
     def _format_reason_text(self, feature: str, value: float, percentile: float, predicted_class: str) -> str:
         """Format domain-specific analyst explanation sentence."""
         desc = FEATURE_DESCRIPTIONS.get(feature, feature.replace("_", " "))
-        
+
         if feature == "peel_chain_depth":
             return f"Peel chain depth of {int(value)} exceeds {percentile:.1f}% of entities, strongly indicating sequential peeling."
         elif feature == "round_amount_ratio":

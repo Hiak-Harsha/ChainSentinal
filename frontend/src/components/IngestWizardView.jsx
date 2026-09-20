@@ -123,12 +123,16 @@ export default function IngestWizardView() {
                       </td>
                       <td>
                         <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>
-                          {(j.valid_rows || j.processed_count || 0).toLocaleString()}
+                          {j.valid_rows != null
+                            ? j.valid_rows.toLocaleString()
+                            : j.processed_count != null
+                            ? j.processed_count.toLocaleString()
+                            : '—'}
                         </span>
                       </td>
                       <td>
                         <span className="mono" style={{ color: j.quarantined_rows > 0 ? 'var(--crimson)' : 'var(--text-dim)' }}>
-                          {(j.quarantined_rows || 0).toLocaleString()}
+                          {j.quarantined_rows != null ? j.quarantined_rows.toLocaleString() : '—'}
                         </span>
                       </td>
                       <td>

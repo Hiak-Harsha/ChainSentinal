@@ -26,7 +26,7 @@ _progress_events: dict[str, asyncio.Queue] = {}
 
 
 class SchemaDetectRequest(BaseModel):
-    file_path: str
+    dataset_name: str | None = None
 
 
 class SaveProfileRequest(BaseModel):
@@ -35,7 +35,7 @@ class SaveProfileRequest(BaseModel):
 
 
 class IngestJobStartRequest(BaseModel):
-    file_path: str
+    dataset_name: str | None = None
     format: str | None = None
     profile_name: str | None = None
 
@@ -48,7 +48,11 @@ def _get_db() -> DatabaseManager:
 async def detect_schema(
     request: Request,
 ) -> dict[str, Any]:
-    """Inspect headers and sample rows to auto-detect canonical schema mapping."""
+    """Inspect headers and sample rows to auto-detect canonical schema mapping.
+    
+    Accepts multipart file upload or server-registered dataset_name.
+    Direct client filesystem paths are strictly prohibited.
+    """
     content_type = request.headers.get("content-type", "")
     target_path: Path | None = None
 
@@ -60,7 +64,9 @@ async def detect_schema(
         upload_dir = settings.DATA_DIR / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
         filename = getattr(uploaded_file, "filename", "uploaded_file")
-        temp_path = upload_dir / f"preview_{int(time.time()*1000)}_{filename}"
+        # Sanitize filename
+        safe_name = Path(filename).name
+        temp_path = upload_dir / f"preview_{int(time.time()*1000)}_{safe_name}"
         content = await uploaded_file.read()
         with open(temp_path, "wb") as f:
             f.write(content)
@@ -69,13 +75,18 @@ async def detect_schema(
         try:
             body = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail="Must provide either multipart file upload or JSON payload with file_path")
-        file_path_str = body.get("file_path") if isinstance(body, dict) else None
-        if not file_path_str:
-            raise HTTPException(status_code=400, detail="Must provide file_path in JSON body")
-        target_path = Path(file_path_str)
-        if not target_path.exists():
-            raise HTTPException(status_code=404, detail="File path not found")
+            raise HTTPException(status_code=400, detail="Must provide multipart file upload or JSON payload with dataset_name")
+        ds_name = body.get("dataset_name") if isinstance(body, dict) else None
+        if not ds_name:
+            raise HTTPException(status_code=400, detail="Must provide dataset_name or multipart file")
+        # Sanitize and resolve from server registry
+        safe_ds = Path(ds_name).name
+        candidate = settings.DATA_DIR / "cli_test" / safe_ds
+        if not candidate.exists():
+            candidate = settings.DATA_DIR / "samples" / safe_ds
+        if not candidate.exists():
+            raise HTTPException(status_code=404, detail=f"Registered dataset '{ds_name}' not found on server")
+        target_path = candidate
 
     try:
         parser = detect_parser(target_path)

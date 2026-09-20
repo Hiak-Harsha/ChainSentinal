@@ -20,8 +20,13 @@ dependencies = [
     "numpy>=2.0.0",
     "networkx>=3.3,<4.0",
     "sse-starlette>=2.1.0,<3.0",
-    "polars>=1.8.0,<2.0",
-    "duckdb>=1.1.0,<2.0",
+    "polars>=1.8.0,<3.0",
+    "duckdb>=1.1.0,<3.0",
+    "pyarrow>=17.0.0",
+    "psutil>=6.0.0",
+    "pyyaml>=6.0.0",
+    "scikit-learn>=1.5.0",
+    "lightgbm>=4.0.0",
 ]
 
 [project.optional-dependencies]

@@ -43,8 +43,8 @@ export default function AlertCenterView({
 
     const matchesStatus = statusFilter === 'ALL' || a.status === statusFilter;
     const matchesGrade = gradeFilter === 'ALL' || a.confidence?.grade === gradeFilter;
-    const priority = a.priority || a.risk_score || 0;
-    const matchesRisk = priority >= minRisk;
+    const priority = a.priority ?? a.risk_score ?? null;
+    const matchesRisk = priority !== null ? priority >= minRisk : minRisk === 0;
 
     return matchesSearch && matchesStatus && matchesGrade && matchesRisk;
   });
@@ -182,27 +182,31 @@ export default function AlertCenterView({
                 </tr>
               ) : (
                 filteredAlerts.map((a) => {
-                  const priority = a.priority || a.risk_score || 0;
+                  const priority = a.priority ?? a.risk_score ?? null;
                   const topTyp = a.typologies?.[0]?.name || 'UNKNOWN';
-                  const topStr = a.typologies?.[0]?.strength || 0.0;
-                  const grade = a.confidence?.grade || 'B';
+                  const topStr = a.typologies?.[0]?.strength ?? null;
+                  const grade = a.confidence?.grade || '—';
                   const ip = a.attribution?.ip || 'N/A';
                   const status = a.status || 'NEW';
 
                   return (
                     <tr key={a.alert_id}>
                       <td>
-                        <span
-                          className={`badge ${
-                            priority > 0.7
-                              ? 'badge-crimson'
-                              : priority > 0.4
-                              ? 'badge-amber'
-                              : 'badge-emerald'
-                          }`}
-                        >
-                          {(priority * 100).toFixed(0)}%
-                        </span>
+                        {priority !== null ? (
+                          <span
+                            className={`badge ${
+                              priority > 0.7
+                                ? 'badge-crimson'
+                                : priority > 0.4
+                                ? 'badge-amber'
+                                : 'badge-emerald'
+                            }`}
+                          >
+                            {(priority * 100).toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="badge badge-outline">—</span>
+                        )}
                       </td>
                       <td>
                         <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -305,7 +309,12 @@ export default function AlertCenterView({
                   </h3>
                 </div>
                 <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                  Alert ID: {selectedAlert.alert_id} &bull; Priority: {((selectedAlert.priority || selectedAlert.risk_score || 0) * 100).toFixed(1)}%
+                  Alert ID: {selectedAlert.alert_id} &bull; Priority:{' '}
+                  {selectedAlert.priority != null
+                    ? `${(selectedAlert.priority * 100).toFixed(1)}%`
+                    : selectedAlert.risk_score != null
+                    ? `${(selectedAlert.risk_score * 100).toFixed(1)}%`
+                    : '—'}
                 </div>
               </div>
 
@@ -434,7 +443,11 @@ export default function AlertCenterView({
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-dim)' }}>Confidence / Posterior:</span>
                       <span className="mono">
-                        {((selectedAlert.attribution?.confidence || selectedAlert.attribution?.score || 0) * 100).toFixed(1)}%
+                        {selectedAlert.attribution?.confidence != null
+                          ? `${(selectedAlert.attribution.confidence * 100).toFixed(1)}%`
+                          : selectedAlert.attribution?.score != null
+                          ? `${(selectedAlert.attribution.score * 100).toFixed(1)}%`
+                          : '—'}
                       </span>
                     </div>
 
@@ -457,9 +470,10 @@ export default function AlertCenterView({
 
                   {selectedAlert.reasons && selectedAlert.reasons.length > 0 ? (
                     selectedAlert.reasons.map((r, idx) => {
-                      const shap = r.shap_value || 0.0;
-                      const isPositive = shap >= 0;
-                      const pctWidth = Math.min(100, Math.max(15, Math.abs(shap) * 60));
+                      const hasShap = r.shap_value !== undefined && r.shap_value !== null;
+                      const shap = hasShap ? r.shap_value : null;
+                      const isPositive = shap !== null && shap >= 0;
+                      const pctWidth = shap !== null ? Math.min(100, Math.max(15, Math.abs(shap) * 60)) : 0;
 
                       return (
                         <div key={idx} style={{ marginBottom: '0.75rem' }}>
@@ -468,21 +482,28 @@ export default function AlertCenterView({
                               {r.feature?.replace(/_/g, ' ')}
                             </span>
                             <div className="shap-bar-track">
-                              <div
-                                className={`shap-bar-fill ${!isPositive ? 'negative' : ''}`}
-                                style={{ width: `${pctWidth}%` }}
-                              ></div>
+                              {shap !== null && (
+                                <div
+                                  className={`shap-bar-fill ${!isPositive ? 'negative' : ''}`}
+                                  style={{ width: `${pctWidth}%` }}
+                                ></div>
+                              )}
                             </div>
                             <span className="shap-val">
-                              {isPositive ? `+${shap.toFixed(2)}` : shap.toFixed(2)}
+                              {shap !== null ? (isPositive ? `+${shap.toFixed(2)}` : shap.toFixed(2)) : '—'}
                             </span>
                           </div>
 
                           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', paddingLeft: '0.25rem' }}>
-                            {r.text} &bull;{' '}
-                            <span style={{ color: 'var(--amber)', fontWeight: 600 }}>
-                              {r.percentile?.toFixed(1) || 95}% percentile
-                            </span>
+                            {r.text}
+                            {r.percentile != null && (
+                              <>
+                                {' '}&bull;{' '}
+                                <span style={{ color: 'var(--amber)', fontWeight: 600 }}>
+                                  {r.percentile.toFixed(1)}% percentile
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       );

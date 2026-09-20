@@ -205,7 +205,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <span>Traversed Hops</span>
                   </div>
                   <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
-                    {traceResult.hops?.length || 0}
+                    {traceResult.hops?.length != null ? traceResult.hops.length : '—'}
                   </div>
                   <div className="kpi-meta">
                     Direction: {traceResult.summary?.direction}
@@ -217,7 +217,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <span>Cashout Exchanges</span>
                   </div>
                   <div className="kpi-value mono" style={{ color: 'var(--crimson)' }}>
-                    {traceResult.summary?.cashout_exchanges?.length || 0}
+                    {traceResult.summary?.cashout_exchanges?.length != null ? traceResult.summary.cashout_exchanges.length : '—'}
                   </div>
                   <div className="kpi-meta">
                     {traceResult.summary?.cashout_exchanges?.join(', ') || 'None in Horizon'}
@@ -229,7 +229,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <span>Terminal Endpoints</span>
                   </div>
                   <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
-                    {traceResult.endpoints?.length || 0}
+                    {traceResult.endpoints?.length != null ? traceResult.endpoints.length : '—'}
                   </div>
                   <div className="kpi-meta">
                     Dormant / Exchange Deposited
@@ -254,7 +254,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                 <div className="card-header">
                   <div className="card-title">
                     <TrendingDown size={18} style={{ color: 'var(--cyan-primary)' }} />
-                    Multi-Hop Taint Flow Ledger ({traceResult.hops?.length || 0} Steps)
+                    Multi-Hop Taint Flow Ledger ({traceResult.hops?.length != null ? traceResult.hops.length : 0} Steps)
                   </div>
                 </div>
 
@@ -299,10 +299,11 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                             <td>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span className="mono" style={{ fontWeight: 700 }}>
-                                  {(h.transferred_sat || 0).toLocaleString()} sat
+                                  {h.transferred_sat != null ? h.transferred_sat.toLocaleString() : '—'} sat
                                 </span>
                                 <span style={{ fontSize: '0.75rem', color: h.taint_pct > 50 ? 'var(--crimson)' : 'var(--amber)' }}>
-                                  {h.taint_pct}% Tainted ({(h.tainted_sat || 0).toLocaleString()} sat)
+                                  {h.taint_pct != null ? `${h.taint_pct}% Tainted` : 'Taint N/A'}{' '}
+                                  ({h.tainted_sat != null ? `${h.tainted_sat.toLocaleString()} sat` : '—'})
                                 </span>
                               </div>
                             </td>
@@ -414,7 +415,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     {pathResult.found ? 'Forensic Route Discovered' : 'No Directed Route Found'}
                   </div>
                   <div className="card-subtitle">
-                    Strategy: {pathResult.strategy} &bull; Total Hops: {pathResult.hop_count || 0}
+                    Strategy: {pathResult.strategy} &bull; Total Hops: {pathResult.hop_count != null ? pathResult.hop_count : '—'}
                   </div>
                 </div>
               </div>
@@ -426,21 +427,21 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <div style={{ padding: '0.75rem 1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Bottleneck Capacity</div>
                       <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--cyan-primary)' }}>
-                        {(pathResult.bottleneck_sat || 0).toLocaleString()} sat
+                        {pathResult.bottleneck_sat != null ? `${pathResult.bottleneck_sat.toLocaleString()} sat` : '—'}
                       </div>
                     </div>
 
                     <div style={{ padding: '0.75rem 1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Total Transferred Volume</div>
                       <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--emerald)' }}>
-                        {(pathResult.total_volume_sat || 0).toLocaleString()} sat
+                        {pathResult.total_volume_sat != null ? `${pathResult.total_volume_sat.toLocaleString()} sat` : '—'}
                       </div>
                     </div>
 
                     <div style={{ padding: '0.75rem 1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Total Intermediary Dwell Delay</div>
                       <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--amber)' }}>
-                        {pathResult.total_dwell_time_sec || 0}s
+                        {pathResult.total_dwell_time_sec != null ? `${pathResult.total_dwell_time_sec}s` : '—'}
                       </div>
                     </div>
                   </div>
@@ -469,7 +470,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                           <span className="mono" style={{ fontWeight: 700, color: '#fff' }}>
-                            {(h.volume_sat || 0).toLocaleString()} sat
+                            {h.volume_sat != null ? `${h.volume_sat.toLocaleString()} sat` : '—'}
                           </span>
                           <span style={{ fontSize: '0.75rem', color: 'var(--purple-primary)' }}>
                             IP: {h.origin_ips?.[0] || 'Relay'}

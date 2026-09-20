@@ -23,9 +23,12 @@ export default function OverviewView({
   const topAlerts = alerts.slice(0, 6);
 
   // Compute summary stats from alerts and metrics
-  const totalEntities = metrics?.entity_count || (metrics?.total_nodes ? Math.round(metrics.total_nodes * 0.4) : 180);
-  const totalEdges = metrics?.total_edges || 450;
-  const criticalCount = alerts.filter((a) => (a.risk_score || a.composite_risk || 0) >= 0.7).length;
+  const totalEntities = metrics?.entity_count ?? metrics?.total_entities ?? null;
+  const totalEdges = metrics?.total_edges ?? null;
+  const criticalCount = alerts.filter((a) => {
+    const r = a.risk_score ?? a.composite_risk ?? a.priority;
+    return r !== undefined && r >= 0.7;
+  }).length;
 
   return (
     <div>
@@ -80,7 +83,7 @@ export default function OverviewView({
             </div>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
-            {totalEntities.toLocaleString()}
+            {totalEntities !== null ? totalEntities.toLocaleString() : '—'}
           </div>
           <div className="kpi-meta">
             CIOH + CoinJoin Anti-Collapse Clustered
@@ -110,7 +113,7 @@ export default function OverviewView({
             </div>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
-            {totalEdges.toLocaleString()}
+            {totalEdges !== null ? totalEdges.toLocaleString() : '—'}
           </div>
           <div className="kpi-meta">
             Transfers, Spends, &amp; Shared Origin Links
@@ -180,7 +183,7 @@ export default function OverviewView({
                     const topTyp = a.typologies?.[0]?.name || 'UNKNOWN';
                     const grade = a.confidence?.grade || 'B';
                     const ip = a.attribution?.ip || 'N/A';
-                    const priority = a.priority || a.risk_score || 0;
+                    const priority = a.priority ?? a.risk_score;
                     return (
                       <tr key={a.alert_id}>
                         <td>

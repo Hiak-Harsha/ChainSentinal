@@ -45,29 +45,9 @@ export default function ModelLabView({ onTriggerDetect }) {
     }
   };
 
-  const supervisedMetrics = labData?.supervised_metrics || {
-    accuracy: 0.965,
-    f1_macro: 0.942,
-    f1_weighted: 0.961,
-  };
-
-  const holdoutResults = labData?.holdout_experiment || {
-    legitimate_anomaly_mean: 0.28,
-    holdout_anomaly_mean: 0.76,
-    anomaly_separation_delta: 0.48,
-    flagged_as_anomalous_ratio: 0.88,
-  };
-
-  const featureImportances = labData?.feature_importances || [
-    { feature: 'peel_chain_depth', importance: 0.185 },
-    { feature: 'circadian_entropy', importance: 0.142 },
-    { feature: 'structuring_proximity', importance: 0.118 },
-    { feature: 'origin_confidence_mean', importance: 0.095 },
-    { feature: 'top_ip_posterior', importance: 0.088 },
-    { feature: 'dust_output_ratio', importance: 0.076 },
-    { feature: 'ip_churn_rate', importance: 0.071 },
-    { feature: 'fan_out_ratio', importance: 0.065 },
-  ];
+  const supervisedMetrics = labData?.supervised_metrics ?? null;
+  const holdoutResults = labData?.holdout_experiment ?? null;
+  const featureImportances = labData?.feature_importances ?? [];
 
   return (
     <div>
@@ -120,7 +100,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>Typology Accuracy</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
-            {(supervisedMetrics.accuracy * 100).toFixed(1)}%
+            {supervisedMetrics?.accuracy !== undefined ? `${(supervisedMetrics.accuracy * 100).toFixed(1)}%` : '—'}
           </div>
           <div className="kpi-meta">
             HistGradientBoosting Multi-Class
@@ -132,7 +112,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>F1 Macro Score</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
-            {(supervisedMetrics.f1_macro * 100).toFixed(1)}%
+            {supervisedMetrics?.f1_macro !== undefined ? `${(supervisedMetrics.f1_macro * 100).toFixed(1)}%` : '—'}
           </div>
           <div className="kpi-meta">
             Balanced across T1–T9 Typologies
@@ -144,7 +124,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>Conformal Coverage</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--purple-primary)' }}>
-            90.0%
+            {labData?.conformal?.coverage !== undefined ? `${(labData.conformal.coverage * 100).toFixed(1)}%` : '90.0% Target'}
           </div>
           <div className="kpi-meta">
             Inductive Split Conformal Guarantee
@@ -156,7 +136,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>Unseen Anomaly Catch</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--crimson)' }}>
-            {(holdoutResults.flagged_as_anomalous_ratio * 100).toFixed(1)}%
+            {holdoutResults?.flagged_as_anomalous_ratio !== undefined ? `${(holdoutResults.flagged_as_anomalous_ratio * 100).toFixed(1)}%` : '—'}
           </div>
           <div className="kpi-meta">
             Hold-out Typology Detection Rate
@@ -178,72 +158,80 @@ export default function ModelLabView({ onTriggerDetect }) {
                 Proof of Real Machine Learning — Detecting Unseen Patterns Without Labels
               </div>
             </div>
-            <span className="badge badge-emerald">Verified Real ML</span>
+            <span className={`badge ${holdoutResults ? 'badge-emerald' : 'badge-amber'}`}>
+              {holdoutResults ? 'Evaluated vs Ground Truth' : 'Pending Training'}
+            </span>
           </div>
 
           <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
             The NTRO problem statement explicitly demands <em>"real AI/ML, not just hardcoded rules"</em>.
-            To prove inductive generalization, our unsupervised Isolation Forest model was trained strictly <strong>without</strong> hold-out typologies <code>T8 (Dusting Attack)</code> and <code>T9 (Multi-Cluster Operator)</code>.
+            To prove inductive generalization, our unsupervised Isolation Forest model is evaluated strictly <strong>without</strong> hold-out typologies <code>T8 (Dusting Attack)</code> and <code>T9 (Multi-Cluster Operator)</code>.
           </div>
 
           {/* Anomaly Separation Bar */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
-                <span style={{ color: 'var(--text-dim)' }}>Legitimate Baseline Anomaly Score:</span>
-                <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>
-                  {holdoutResults.legitimate_anomaly_mean.toFixed(3)}
+          {holdoutResults ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Legitimate Baseline Anomaly Score:</span>
+                  <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>
+                    {holdoutResults.legitimate_anomaly_mean.toFixed(3)}
+                  </span>
+                </div>
+                <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.min(100, Math.max(0, holdoutResults.legitimate_anomaly_mean * 100))}%`,
+                      background: 'var(--emerald)',
+                    }}
+                  ></div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Unseen Hold-Out Anomaly Score:</span>
+                  <span className="mono" style={{ color: 'var(--crimson)', fontWeight: 700 }}>
+                    {holdoutResults.holdout_anomaly_mean.toFixed(3)}
+                  </span>
+                </div>
+                <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.min(100, Math.max(0, holdoutResults.holdout_anomaly_mean * 100))}%`,
+                      background: 'var(--crimson)',
+                    }}
+                  ></div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: '0.5rem',
+                  padding: '0.85rem 1rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(0, 242, 254, 0.04)',
+                  border: '1px solid rgba(0, 242, 254, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                  Empirical Separation Delta (&Delta;):
+                </span>
+                <span className="mono" style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--cyan-primary)' }}>
+                  {holdoutResults.anomaly_separation_delta >= 0 ? `+${holdoutResults.anomaly_separation_delta.toFixed(3)}` : holdoutResults.anomaly_separation_delta.toFixed(3)}
                 </span>
               </div>
-              <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${holdoutResults.legitimate_anomaly_mean * 100}%`,
-                    background: 'var(--emerald)',
-                  }}
-                ></div>
-              </div>
             </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
-                <span style={{ color: 'var(--text-dim)' }}>Unseen Hold-Out Anomaly Score:</span>
-                <span className="mono" style={{ color: 'var(--crimson)', fontWeight: 700 }}>
-                  {holdoutResults.holdout_anomaly_mean.toFixed(3)}
-                </span>
-              </div>
-              <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${holdoutResults.holdout_anomaly_mean * 100}%`,
-                    background: 'var(--crimson)',
-                  }}
-                ></div>
-              </div>
+          ) : (
+            <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)' }}>
+              No hold-out experiment metrics available. Click &quot;Retrain Intelligence Models&quot; to evaluate.
             </div>
-
-            <div
-              style={{
-                marginTop: '0.5rem',
-                padding: '0.85rem 1rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(0, 242, 254, 0.04)',
-                border: '1px solid rgba(0, 242, 254, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600 }}>
-                Empirical Separation Delta (&Delta;):
-              </span>
-              <span className="mono" style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--cyan-primary)' }}>
-                +{holdoutResults.anomaly_separation_delta.toFixed(3)}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Right: Global TreeSHAP Feature Importance */}
@@ -261,31 +249,37 @@ export default function ModelLabView({ onTriggerDetect }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {featureImportances.map((item, idx) => {
-              const pct = Math.min(100, Math.round((item.importance / 0.2) * 100));
-              return (
-                <div key={idx}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                    <span className="mono" style={{ color: 'var(--text-muted)' }}>
-                      {item.feature.replace(/_/g, ' ')}
-                    </span>
-                    <span className="mono" style={{ color: 'var(--cyan-primary)', fontWeight: 600 }}>
-                      {(item.importance * 100).toFixed(1)}%
-                    </span>
-                  </div>
+            {featureImportances.length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                No feature importance data available. Trigger training to compute TreeSHAP attributions.
+              </div>
+            ) : (
+              featureImportances.map((item, idx) => {
+                const pct = Math.min(100, Math.round((item.importance / 0.2) * 100));
+                return (
+                  <div key={idx}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                      <span className="mono" style={{ color: 'var(--text-muted)' }}>
+                        {item.feature.replace(/_/g, ' ')}
+                      </span>
+                      <span className="mono" style={{ color: 'var(--cyan-primary)', fontWeight: 600 }}>
+                        {(item.importance * 100).toFixed(1)}%
+                      </span>
+                    </div>
 
-                  <div style={{ height: '7px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        height: '100%',
-                        width: `${pct}%`,
-                        background: 'linear-gradient(90deg, #00f2fe, #3b82f6)',
-                      }}
-                    ></div>
+                    <div style={{ height: '7px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${pct}%`,
+                          background: 'linear-gradient(90deg, #00f2fe, #3b82f6)',
+                        }}
+                      ></div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

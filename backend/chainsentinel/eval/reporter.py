@@ -6,12 +6,52 @@ import json
 from pathlib import Path
 import time
 from typing import Any
+import yaml
 
 from chainsentinel.eval.cluster_eval import ClusterEvaluator
 from chainsentinel.eval.correlate_eval import CorrelateEvaluator
 from chainsentinel.models.pipeline import ModelPipeline
 from chainsentinel.storage.db import DatabaseManager
 from chainsentinel.trace.agent import AutonomousInvestigator
+
+
+def load_eval_targets(custom_path: str | Path | None = None) -> dict[str, Any]:
+    """Load evaluation target thresholds from the single source of truth (targets.yaml)."""
+    candidates = [
+        Path(custom_path) if custom_path else None,
+        Path(__file__).resolve().parent / "targets.yaml",
+        Path(__file__).resolve().parents[3] / "eval" / "targets.yaml",
+        Path("eval/targets.yaml"),
+    ]
+    for c in candidates:
+        if c and c.exists():
+            with open(c, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+    return {}
+
+
+def _evaluate_metric(
+    actual: float | None, target: float, comparator: str = ">="
+) -> tuple[str, str]:
+    """Compare actual metric with target and return (formatted_target, verdict)."""
+    sym = "&ge;" if comparator == ">=" else ("&le;" if comparator == "<=" else comparator)
+    target_fmt = f"{sym} {target * 100:.1f}%" if target <= 1.0 else f"{sym} {target:.3f}"
+
+    if actual is None:
+        return target_fmt, "**NOT RUN**"
+
+    passed = False
+    if comparator == ">=":
+        passed = actual >= target
+    elif comparator == "<=":
+        passed = actual <= target
+    elif comparator == ">":
+        passed = actual > target
+    elif comparator == "<":
+        passed = actual < target
+
+    verdict = "**PASSED**" if passed else "**FAILED**"
+    return target_fmt, verdict
 
 
 class ForensicReporter:
@@ -36,11 +76,7 @@ class ForensicReporter:
         else:
             cluster_metrics = {
                 "evaluated_addresses": len(discovered_map),
-                "pairwise_precision": 1.0,
-                "pairwise_recall": 0.85,
-                "pairwise_f1": 0.91,
-                "adjusted_rand_index": 0.75,
-                "normalized_mutual_info": 0.78,
+                "status": "ground_truth_unavailable",
             }
 
         # 2. IP Attribution Evaluation
@@ -63,33 +99,19 @@ class ForensicReporter:
             )
         else:
             attr_metrics = {
-                "overall": {"top1_accuracy": 0.88, "top3_accuracy": 0.96, "total_evaluated": len(attributions)},
-                "by_obfuscation_level": {
-                    "0": {"top1_accuracy": 0.95, "top3_accuracy": 1.0, "total": 20},
-                    "1": {"top1_accuracy": 0.90, "top3_accuracy": 0.95, "total": 20},
-                    "2": {"top1_accuracy": 0.80, "top3_accuracy": 0.90, "total": 20},
-                    "3": {"top1_accuracy": 0.70, "top3_accuracy": 0.85, "total": 20},
-                },
+                "overall": {"total_evaluated": len(attributions)},
+                "status": "ground_truth_unavailable",
             }
 
-        # 3. Supervised Model Evaluation
+        # 3. Supervised & Unsupervised Model Evaluation
         pipeline = ModelPipeline(db=self.db)
         if self.gt_path.exists():
             train_res = pipeline.train(ground_truth_path=self.gt_path)
             supervised_metrics = train_res.get("metrics", {})
             holdout_res = pipeline.evaluate_holdout(ground_truth_path=self.gt_path)
         else:
-            supervised_metrics = {
-                "accuracy": 0.965,
-                "f1_macro": 0.942,
-                "f1_weighted": 0.961,
-            }
-            holdout_res = {
-                "legitimate_anomaly_mean": 0.28,
-                "holdout_anomaly_mean": 0.76,
-                "anomaly_separation_delta": 0.48,
-                "flagged_as_anomalous_ratio": 0.88,
-            }
+            supervised_metrics = {"status": "ground_truth_unavailable"}
+            holdout_res = {"status": "ground_truth_unavailable"}
 
         # 4. Database & Throughput Telemetry
         tx_count_row = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()
@@ -99,7 +121,7 @@ class ForensicReporter:
 
         elapsed_sec = max(0.01, time.time() - t0)
 
-        return {
+        results = {
             "evaluation_timestamp": time.time(),
             "telemetry": {
                 "total_observations": int(obs_count_row[0]) if obs_count_row else 0,
@@ -113,13 +135,16 @@ class ForensicReporter:
             "supervised_classification": supervised_metrics,
             "unsupervised_holdout_experiment": holdout_res,
         }
+        return results
 
     def generate_markdown_report(
         self,
         eval_results: dict[str, Any],
         output_path: str | Path | None = None,
+        targets_path: str | Path | None = None,
     ) -> str:
-        """Render evaluation report as GitHub-flavored Markdown."""
+        """Render evaluation report as GitHub-flavored Markdown comparing against targets.yaml."""
+        targets = load_eval_targets(targets_path)
         t = eval_results.get("telemetry", {})
         c = eval_results.get("clustering", {})
         a = eval_results.get("attribution", {})
@@ -128,10 +153,81 @@ class ForensicReporter:
 
         top1_acc = a.get("overall_top1_accuracy")
         if top1_acc is None:
-            top1_acc = a.get("overall", {}).get("top1_accuracy", 0.88)
+            top1_acc = a.get("overall", {}).get("top1_accuracy")
         top3_acc = a.get("overall_top3_accuracy")
         if top3_acc is None:
-            top3_acc = a.get("overall", {}).get("top3_accuracy", 0.96)
+            top3_acc = a.get("overall", {}).get("top3_accuracy")
+
+        # Scorecard item evaluations against targets.yaml
+        t_clust = targets.get("clustering", {})
+        t_attr = targets.get("attribution", {})
+        t_sup = targets.get("supervised_classification", {})
+        t_unsup = targets.get("unsupervised_holdout_experiment", {})
+
+        # Precision
+        pw_prec = c.get("pairwise_precision")
+        tgt_prec = t_clust.get("pairwise_precision", {}).get("target", 0.95)
+        cmp_prec = t_clust.get("pairwise_precision", {}).get("comparator", ">=")
+        tgt_prec_fmt, v_prec = _evaluate_metric(pw_prec, tgt_prec, cmp_prec)
+        val_prec_fmt = f"**{pw_prec * 100:.1f}%**" if pw_prec is not None else "N/A"
+
+        # NMI
+        nmi = c.get("normalized_mutual_info")
+        tgt_nmi = t_clust.get("normalized_mutual_info", {}).get("target", 0.70)
+        cmp_nmi = t_clust.get("normalized_mutual_info", {}).get("comparator", ">=")
+        tgt_nmi_fmt, v_nmi = _evaluate_metric(nmi, tgt_nmi, cmp_nmi)
+        val_nmi_fmt = f"**{nmi:.3f}**" if nmi is not None else "N/A"
+
+        # Top 1 IP
+        tgt_top1 = t_attr.get("overall_top1_accuracy", {}).get("target", 0.80)
+        cmp_top1 = t_attr.get("overall_top1_accuracy", {}).get("comparator", ">=")
+        tgt_top1_fmt, v_top1 = _evaluate_metric(top1_acc, tgt_top1, cmp_top1)
+        val_top1_fmt = f"**{top1_acc * 100:.1f}%**" if top1_acc is not None else "N/A"
+
+        # Top 3 IP
+        tgt_top3 = t_attr.get("overall_top3_accuracy", {}).get("target", 0.90)
+        cmp_top3 = t_attr.get("overall_top3_accuracy", {}).get("comparator", ">=")
+        tgt_top3_fmt, v_top3 = _evaluate_metric(top3_acc, tgt_top3, cmp_top3)
+        val_top3_fmt = f"**{top3_acc * 100:.1f}%**" if top3_acc is not None else "N/A"
+
+        # Accuracy
+        acc = s.get("accuracy")
+        tgt_acc = t_sup.get("accuracy", {}).get("target", 0.90)
+        cmp_acc = t_sup.get("accuracy", {}).get("comparator", ">=")
+        tgt_acc_fmt, v_acc = _evaluate_metric(acc, tgt_acc, cmp_acc)
+        val_acc_fmt = f"**{acc * 100:.1f}%**" if acc is not None else "N/A"
+
+        # F1 Macro
+        f1 = s.get("f1_macro")
+        tgt_f1 = t_sup.get("f1_macro", {}).get("target", 0.85)
+        cmp_f1 = t_sup.get("f1_macro", {}).get("comparator", ">=")
+        tgt_f1_fmt, v_f1 = _evaluate_metric(f1, tgt_f1, cmp_f1)
+        val_f1_fmt = f"**{f1 * 100:.1f}%**" if f1 is not None else "N/A"
+
+        # Separation Delta
+        sep = h.get("anomaly_separation_delta")
+        tgt_sep = t_unsup.get("anomaly_separation_delta", {}).get("target", 0.30)
+        cmp_sep = t_unsup.get("anomaly_separation_delta", {}).get("comparator", ">=")
+        tgt_sep_fmt, v_sep = _evaluate_metric(sep, tgt_sep, cmp_sep)
+        val_sep_fmt = f"**+{sep:.3f}**" if sep is not None else "N/A"
+
+        # Anomaly Flagged Ratio
+        flag_ratio = h.get("flagged_as_anomalous_ratio")
+        tgt_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("target", 0.80)
+        cmp_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("comparator", ">=")
+        tgt_flag_fmt, v_flag = _evaluate_metric(flag_ratio, tgt_flag, cmp_flag)
+        val_flag_fmt = f"**{flag_ratio * 100:.1f}%**" if flag_ratio is not None else "N/A"
+
+        fmt_prec = f"{c['pairwise_precision']:.4f}" if c.get("pairwise_precision") is not None else "N/A"
+        fmt_rec = f"{c['pairwise_recall']:.4f}" if c.get("pairwise_recall") is not None else "N/A"
+        fmt_f1 = f"{c['pairwise_f1']:.4f}" if c.get("pairwise_f1") is not None else "N/A"
+        fmt_ari = f"{c['adjusted_rand_index']:.4f}" if c.get("adjusted_rand_index") is not None else "N/A"
+        fmt_nmi_score = f"{c['normalized_mutual_info']:.4f}" if c.get("normalized_mutual_info") is not None else "N/A"
+
+        fmt_legit_m = f"{h['legitimate_anomaly_mean']:.3f}" if h.get("legitimate_anomaly_mean") is not None else "N/A"
+        fmt_holdout_m = f"{h['holdout_anomaly_mean']:.3f}" if h.get("holdout_anomaly_mean") is not None else "N/A"
+        fmt_sep_d = f"+{h['anomaly_separation_delta']:.3f}" if h.get("anomaly_separation_delta") is not None else "N/A"
+        fmt_flag_r = f"{h['flagged_as_anomalous_ratio'] * 100:.1f}%" if h.get("flagged_as_anomalous_ratio") is not None else "N/A"
 
         report_lines = [
             "# ChainSentinel — Forensic Pipeline Evaluation Report",
@@ -139,22 +235,23 @@ class ForensicReporter:
             "",
             "> **Generated:** " + time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(eval_results.get("evaluation_timestamp", time.time()))),
             "> **Dataset:** " + str(self.gt_path.name),
+            "> **Target Benchmarks:** `eval/targets.yaml`",
             "> **Deployment Mode:** Strict Offline / Air-Gapped",
             "",
             "---",
             "",
             "## 1. Executive Summary & Verification Scorecard",
             "",
-            "| Evaluation Dimension | Metric | Benchmark Result | SIH26146 Target | Verdict |",
+            "| Evaluation Dimension | Metric | Benchmark Result | Target | Verdict |",
             "| :--- | :--- | :--- | :--- | :--- |",
-            f"| **Entity Resolution (CIOH)** | Pairwise Precision | **{c.get('pairwise_precision', 1.0) * 100:.1f}%** | &ge; 95.0% | **PASSED** |",
-            f"| **Entity Resolution (CIOH)** | Normalized Mutual Info (NMI) | **{c.get('normalized_mutual_info', 0.78):.3f}** | &ge; 0.700 | **PASSED** |",
-            f"| **Network Attribution** | Overall Top-1 IP Accuracy | **{float(top1_acc) * 100:.1f}%** | &ge; 80.0% | **PASSED** |",
-            f"| **Network Attribution** | Overall Top-3 IP Accuracy | **{float(top3_acc) * 100:.1f}%** | &ge; 90.0% | **PASSED** |",
-            f"| **Typology Classification** | Multi-Class Accuracy | **{s.get('accuracy', 0.965) * 100:.1f}%** | &ge; 90.0% | **PASSED** |",
-            f"| **Typology Classification** | Macro F1-Score | **{s.get('f1_macro', 0.942) * 100:.1f}%** | &ge; 85.0% | **PASSED** |",
-            f"| **Unseen Hold-out Anomaly** | Anomaly Separation (&Delta;) | **+{h.get('anomaly_separation_delta', 0.48):.3f}** | &ge; +0.300 | **PASSED** |",
-            f"| **Unseen Hold-out Anomaly** | Hold-out Anomaly Catch Rate | **{h.get('flagged_as_anomalous_ratio', 0.88) * 100:.1f}%** | &ge; 80.0% | **PASSED** |",
+            f"| **Entity Resolution (CIOH)** | Pairwise Precision | {val_prec_fmt} | {tgt_prec_fmt} | {v_prec} |",
+            f"| **Entity Resolution (CIOH)** | Normalized Mutual Info (NMI) | {val_nmi_fmt} | {tgt_nmi_fmt} | {v_nmi} |",
+            f"| **Network Attribution** | Overall Top-1 IP Accuracy | {val_top1_fmt} | {tgt_top1_fmt} | {v_top1} |",
+            f"| **Network Attribution** | Overall Top-3 IP Accuracy | {val_top3_fmt} | {tgt_top3_fmt} | {v_top3} |",
+            f"| **Typology Classification** | Multi-Class Accuracy | {val_acc_fmt} | {tgt_acc_fmt} | {v_acc} |",
+            f"| **Typology Classification** | Macro F1-Score | {val_f1_fmt} | {tgt_f1_fmt} | {v_f1} |",
+            f"| **Unseen Hold-out Anomaly** | Anomaly Separation (&Delta;) | {val_sep_fmt} | {tgt_sep_fmt} | {v_sep} |",
+            f"| **Unseen Hold-out Anomaly** | Hold-out Anomaly Catch Rate | {val_flag_fmt} | {tgt_flag_fmt} | {v_flag} |",
             "",
             "---",
             "",
@@ -162,12 +259,12 @@ class ForensicReporter:
             "",
             "Common-Input-Ownership Heuristic (CIOH) clustering implemented via Disjoint-Set / Union-Find with path compression, strictly guarded by multi-party CoinJoin transaction isolation.",
             "",
-            f"- **Evaluated Addresses:** `{c.get('evaluated_addresses', 0):,}`",
-            f"- **Pairwise Precision:** `{c.get('pairwise_precision', 1.0):.4f}` (Zero false entity merges)",
-            f"- **Pairwise Recall:** `{c.get('pairwise_recall', 0.85):.4f}`",
-            f"- **Pairwise F1-Score:** `{c.get('pairwise_f1', 0.91):.4f}`",
-            f"- **Adjusted Rand Index (ARI):** `{c.get('adjusted_rand_index', 0.75):.4f}`",
-            f"- **Normalized Mutual Information (NMI):** `{c.get('normalized_mutual_info', 0.78):.4f}`",
+            f"- **Evaluated Addresses:** `{c.get('evaluated_addresses', 'N/A')}`",
+            f"- **Pairwise Precision:** `{fmt_prec}`",
+            f"- **Pairwise Recall:** `{fmt_rec}`",
+            f"- **Pairwise F1-Score:** `{fmt_f1}`",
+            f"- **Adjusted Rand Index (ARI):** `{fmt_ari}`",
+            f"- **Normalized Mutual Information (NMI):** `{fmt_nmi_score}`",
             "",
             "---",
             "",
@@ -187,10 +284,17 @@ class ForensicReporter:
             "3": "High (Tor / VPN / Anonymizer pool)",
         }
         for lvl in ["0", "1", "2", "3"]:
-            stats = by_lvl.get(lvl) or by_lvl.get(f"level_{lvl}") or {"top1_accuracy": 0.0, "top3_accuracy": 0.0, "total": 0}
-            t_count = stats.get("total_entities", stats.get("total", 0))
+            stats = by_lvl.get(lvl) or by_lvl.get(f"level_{lvl}")
+            if stats:
+                t_count = stats.get("total_entities", stats.get("total", 0))
+                top1 = f"{stats.get('top1_accuracy', 0.0) * 100:.1f}%"
+                top3 = f"{stats.get('top3_accuracy', 0.0) * 100:.1f}%"
+            else:
+                t_count = 0
+                top1 = "N/A"
+                top3 = "N/A"
             report_lines.append(
-                f"| **Level {lvl}** | {lvl_names.get(lvl, 'Obfuscated')} | {stats.get('top1_accuracy', 0.0) * 100:.1f}% | {stats.get('top3_accuracy', 0.0) * 100:.1f}% | {t_count} |"
+                f"| **Level {lvl}** | {lvl_names.get(lvl, 'Obfuscated')} | {top1} | {top3} | {t_count} |"
             )
 
         report_lines.extend([
@@ -199,15 +303,12 @@ class ForensicReporter:
             "",
             "## 4. Unseen Hold-Out Typology Experiment (Proof of Real AI/ML)",
             "",
-            "To prove inductive generalization beyond hardcoded rules, an unsupervised Isolation Forest anomaly detector was trained strictly **excluding** hold-out typologies `T8 (Dusting)` and `T9 (Multi-Cluster Operator)`.",
+            "To prove inductive generalization beyond hardcoded rules, an unsupervised Isolation Forest anomaly detector was evaluated on unseen hold-out typologies `T8 (Dusting)` and `T9 (Multi-Cluster Operator)`.",
             "",
-            f"- **Legitimate Baseline Anomaly Mean:** `{h.get('legitimate_anomaly_mean', 0.28):.3f}`",
-            f"- **Unseen Hold-out Typology Anomaly Mean:** `{h.get('holdout_anomaly_mean', 0.76):.3f}`",
-            f"- **Empirical Separation Delta (&Delta;):** `+{h.get('anomaly_separation_delta', 0.48):.3f}`",
-            f"- **Unseen Hold-out Flagging Rate:** `{h.get('flagged_as_anomalous_ratio', 0.88) * 100:.1f}%`",
-            "",
-            "> [!NOTE]",
-            "> A separation delta of $+0.48$ demonstrates clear statistical boundary isolation on novel illicit topologies without requiring labeled supervision.",
+            f"- **Legitimate Baseline Anomaly Mean:** `{fmt_legit_m}`",
+            f"- **Unseen Hold-out Typology Anomaly Mean:** `{fmt_holdout_m}`",
+            f"- **Empirical Separation Delta (&Delta;):** `{fmt_sep_d}`",
+            f"- **Unseen Hold-out Flagging Rate:** `{fmt_flag_r}`",
             "",
             "---",
             "",
@@ -220,6 +321,7 @@ class ForensicReporter:
             f"- **Active Risk Alerts:** `{t.get('total_alerts', 0):,}`",
             f"- **Evaluation Run Latency:** `{t.get('evaluation_runtime_sec', 0.0):.3f}s`",
             "",
+            "",
             "---",
             "*ChainSentinel Forensic Intelligence Engine — Confidential / Law Enforcement & Defense Use Only*",
         ])
@@ -230,13 +332,15 @@ class ForensicReporter:
             out_p = Path(output_path)
             out_p.parent.mkdir(parents=True, exist_ok=True)
             out_p.write_text(report_content, encoding="utf-8")
+            # Also emit metrics.json
+            metrics_json_path = out_p.parent / "metrics.json"
+            metrics_json_path.write_text(json.dumps(eval_results, indent=2), encoding="utf-8")
 
         return report_content
 
     def export_sample_dossier(self, output_path: str | Path | None = None) -> str:
         """Generate and export a court-admissible sample case file."""
         conn = self.db.conn
-        # Pick highest-risk entity
         row = conn.execute("SELECT entity_id FROM alerts ORDER BY risk_score DESC LIMIT 1").fetchone()
         if not row:
             row = conn.execute("SELECT entity_id FROM entities LIMIT 1").fetchone()

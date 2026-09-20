@@ -208,6 +208,31 @@ class TestForensicExplainer:
             assert "text" in r
             assert isinstance(r["text"], str) and len(r["text"]) > 5
 
+    def test_treeshap_additivity_to_margin(self, prepared_db):
+        """ChainSentinel v2 Rule 3: TreeSHAP values must sum to the model margin."""
+        db, _ = prepared_db
+        extractor = MultimodalFeatureExtractor(db)
+        features_data = extractor.extract_all_and_save()
+        X = [f["features"] for f in features_data]
+        y = ["T1_PEEL_CHAIN" if i % 2 == 0 else "LEGITIMATE" for i in range(len(X))]
+
+        clf = SupervisedTypologyClassifier(random_state=42)
+        clf.fit(X, y)
+
+        explainer = ForensicExplainer(clf, X)
+        sample = X[0]
+        target_class_idx = 0
+
+        # Exact TreeSHAP computation
+        shap_vals, base_margin = explainer.compute_shap_values(sample, target_class_idx=target_class_idx)
+        raw_margin = float(clf.predict_raw([sample])[0])
+
+        # Lundberg efficiency axiom: sum(shap) + base == margin
+        computed_margin = sum(shap_vals.values()) + base_margin
+        assert abs(computed_margin - raw_margin) < 1e-4, (
+            f"TreeSHAP additivity violated: sum(shap)+base={computed_margin} vs raw_margin={raw_margin}"
+        )
+
 
 class TestAlertGenerationAndContract:
     """Verify alert synthesis, composite risk score, and Section 7 API contract schema."""
@@ -317,7 +342,7 @@ class TestModelPipelineAndAPI:
             client = TestClient(app)
 
             # 1. Models train
-            res_train = client.post("/api/models/train", json={"ground_truth_path": GROUND_TRUTH})
+            res_train = client.post("/api/models/train", json={"dataset_name": "cli_test"})
             assert res_train.status_code == 200
             assert res_train.json()["status"] == "success"
 

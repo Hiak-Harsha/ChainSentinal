@@ -45,13 +45,20 @@ yarn-error.log*
 # DuckDB & generated test artifacts
 *.duckdb
 *.duckdb.wal
+*.pkl
+*.model.bin
 backend/data/*.duckdb
 backend/data/*.duckdb.wal
-backend/data/models/*.pkl
+backend/data/models/*
+!backend/data/models/.gitkeep
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
 backend/data/parquet_export/
 backend/data/test_*
 data/test_output/
 data/test_output_2/
+scratch/
+scratch_*
 
 # IDE & OS
 .vscode/

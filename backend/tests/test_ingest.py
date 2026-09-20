@@ -239,7 +239,11 @@ class TestApiEndpoints:
 
     def test_detect_schema_endpoint(self):
         client = TestClient(app)
-        res = client.post("/api/ingest/detect-schema", json={"file_path": TEST_JSON})
+        with open(TEST_JSON, "rb") as f:
+            res = client.post(
+                "/api/ingest/detect-schema",
+                files={"file": ("observations.json", f, "application/json")},
+            )
         assert res.status_code == 200
         data = res.json()
         assert "headers" in data

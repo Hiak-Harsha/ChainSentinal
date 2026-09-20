@@ -56,13 +56,13 @@ export default function GraphCanvasView({
 
       // Add nodes
       (data.nodes || []).forEach((n) => {
-        const risk = n.risk_score || n.risk || 0.0;
+        const risk = n.risk_score ?? n.risk ?? null;
         let color = '#3b82f6'; // default blue
         if (n.type === 'IP') color = '#8b5cf6';
         else if (n.type === 'Transaction') color = '#64748b';
         else if (n.type === 'Address') color = '#0284c7';
-        else if (risk >= 0.7 || ['DARKNET', 'RANSOMWARE', 'MIXER'].includes(n.entity_type)) color = '#ef4444';
-        else if (risk >= 0.4) color = '#f59e0b';
+        else if (risk !== null && (risk >= 0.7 || ['DARKNET', 'RANSOMWARE', 'MIXER'].includes(n.entity_type))) color = '#ef4444';
+        else if (risk !== null && risk >= 0.4) color = '#f59e0b';
         else if (n.type === 'Entity') color = '#00f2fe';
 
         elements.push({
@@ -88,7 +88,7 @@ export default function GraphCanvasView({
             source: e.source,
             target: e.target,
             label: e.edge_type || '',
-            weight: e.weight || 1.0,
+            weight: typeof e.weight === 'number' ? e.weight : null,
           },
         });
       });
@@ -382,8 +382,8 @@ export default function GraphCanvasView({
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                   <span style={{ color: 'var(--text-dim)' }}>Risk Score:</span>
-                  <span style={{ fontWeight: 700, color: selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--emerald)' }}>
-                    {((selectedNode.risk || 0) * 100).toFixed(0)}%
+                  <span style={{ fontWeight: 700, color: selectedNode.risk != null ? (selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--emerald)') : 'var(--text-dim)' }}>
+                    {selectedNode.risk != null ? `${(selectedNode.risk * 100).toFixed(0)}%` : '—'}
                   </span>
                 </div>
               </div>

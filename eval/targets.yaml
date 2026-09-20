@@ -1,0 +1,44 @@
+# ChainSentinel — Forensic Pipeline Evaluation Targets (SIH26146)
+# Single Source of Truth for PASS/FAIL verdicts. Never hardcoded in code.
+
+version: "2.0.0"
+
+clustering:
+  pairwise_precision:
+    target: 0.95
+    comparator: ">="
+    description: "Common-Input-Ownership Heuristic pairwise clustering precision"
+  normalized_mutual_info:
+    target: 0.70
+    comparator: ">="
+    description: "Normalized Mutual Information vs ground truth entity partition"
+
+attribution:
+  overall_top1_accuracy:
+    target: 0.80
+    comparator: ">="
+    description: "Top-1 IP attribution accuracy across evaluated entities"
+  overall_top3_accuracy:
+    target: 0.90
+    comparator: ">="
+    description: "Top-3 IP attribution accuracy across evaluated entities"
+
+supervised_classification:
+  accuracy:
+    target: 0.90
+    comparator: ">="
+    description: "Multi-class typology classification accuracy"
+  f1_macro:
+    target: 0.85
+    comparator: ">="
+    description: "Macro-averaged F1 score across typologies"
+
+unsupervised_holdout_experiment:
+  anomaly_separation_delta:
+    target: 0.30
+    comparator: ">="
+    description: "Empirical anomaly score delta (holdout illicit mean - legitimate mean)"
+  flagged_as_anomalous_ratio:
+    target: 0.80
+    comparator: ">="
+    description: "Ratio of held-out illicit entities flagged anomalous (score > 0.5)"

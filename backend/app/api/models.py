@@ -13,8 +13,11 @@ from chainsentinel.storage.db import DatabaseManager
 router = APIRouter(prefix="/models", tags=["models"])
 
 
+from chainsentinel.common.datasets import resolve_registered_ground_truth
+
+
 class TrainRequest(BaseModel):
-    ground_truth_path: str | None = "data/cli_test/ground_truth.json"
+    dataset_name: str | None = "default"
 
 
 class DetectRequest(BaseModel):
@@ -27,7 +30,8 @@ def train_models(payload: TrainRequest | None = None) -> dict[str, Any]:
     """Train supervised gradient boost model, calibrate conformal bounds, and fit anomaly detector."""
     db = DatabaseManager(settings.DB_PATH)
     pipeline = ModelPipeline(db=db, model_dir=settings.MODELS_DIR)
-    gt_path = payload.ground_truth_path if payload else "data/cli_test/ground_truth.json"
+    ds_name = payload.dataset_name if payload and payload.dataset_name else "default"
+    gt_path = resolve_registered_ground_truth(ds_name)
     report = pipeline.train(ground_truth_path=gt_path)
     return report
 

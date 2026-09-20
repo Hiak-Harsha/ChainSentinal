@@ -16,11 +16,14 @@ from chainsentinel.storage.db import DatabaseManager
 router = APIRouter(prefix="/correlate", tags=["Network Correlation"])
 
 
+from chainsentinel.common.datasets import resolve_registered_ground_truth
+
+
 class CorrelateRunRequest(BaseModel):
     time_window_sec: float = 60.0
     p_value_thresh: float = 0.05
     num_permutations: int = 100
-    ground_truth_path: str | None = None
+    dataset_name: str | None = None
 
 
 def _get_db() -> DatabaseManager:
@@ -44,10 +47,12 @@ def trigger_correlation(req: CorrelateRunRequest = CorrelateRunRequest()) -> dic
         "summary": summary.to_dict(),
     }
 
-    # Evaluate against ground truth if available
-    gt_file = Path(req.ground_truth_path) if req.ground_truth_path else None
-    if not gt_file and (settings.DATA_DIR / "cli_test" / "ground_truth.json").exists():
-        gt_file = settings.DATA_DIR / "cli_test" / "ground_truth.json"
+    # Evaluate against ground truth if registered
+    gt_file: Path | None = None
+    try:
+        gt_file = resolve_registered_ground_truth(req.dataset_name)
+    except Exception:
+        gt_file = None
 
     if gt_file and gt_file.exists():
         aem_res = db.conn.execute("SELECT address, entity_id FROM address_entity_map").fetchall()

@@ -56,7 +56,7 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
 
           <div className="status-pill">
             <CheckCircle2 size={13} style={{ color: 'var(--purple-primary)' }} />
-            <span>MODELS: {health?.models_loaded || 2} ACTIVE</span>
+            <span>MODELS: {health?.models_loaded !== undefined ? `${health.models_loaded} ACTIVE` : 'READY'}</span>
           </div>
         </div>
       </div>
