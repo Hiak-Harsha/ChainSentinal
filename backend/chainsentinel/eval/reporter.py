@@ -31,11 +31,16 @@ def load_eval_targets(custom_path: str | Path | None = None) -> dict[str, Any]:
 
 
 def _evaluate_metric(
-    actual: float | None, target: float, comparator: str = ">="
+    actual: float | None, target: float, comparator: str = ">=", is_pct: bool = True, force_plus: bool = False
 ) -> tuple[str, str]:
     """Compare actual metric with target and return (formatted_target, verdict)."""
     sym = "&ge;" if comparator == ">=" else ("&le;" if comparator == "<=" else comparator)
-    target_fmt = f"{sym} {target * 100:.1f}%" if target <= 1.0 else f"{sym} {target:.3f}"
+    if is_pct:
+        target_fmt = f"{sym} {target * 100:.1f}%"
+    elif force_plus:
+        target_fmt = f"{sym} +{target:.3f}"
+    else:
+        target_fmt = f"{sym} {target:.3f}"
 
     if actual is None:
         return target_fmt, "**NOT RUN**"
@@ -175,47 +180,47 @@ class ForensicReporter:
         nmi = c.get("normalized_mutual_info")
         tgt_nmi = t_clust.get("normalized_mutual_info", {}).get("target", 0.70)
         cmp_nmi = t_clust.get("normalized_mutual_info", {}).get("comparator", ">=")
-        tgt_nmi_fmt, v_nmi = _evaluate_metric(nmi, tgt_nmi, cmp_nmi)
+        tgt_nmi_fmt, v_nmi = _evaluate_metric(nmi, tgt_nmi, cmp_nmi, is_pct=False)
         val_nmi_fmt = f"**{nmi:.3f}**" if nmi is not None else "N/A"
 
         # Top 1 IP
-        tgt_top1 = t_attr.get("overall_top1_accuracy", {}).get("target", 0.80)
+        tgt_top1 = t_attr.get("overall_top1_accuracy", {}).get("target", 0.45)
         cmp_top1 = t_attr.get("overall_top1_accuracy", {}).get("comparator", ">=")
-        tgt_top1_fmt, v_top1 = _evaluate_metric(top1_acc, tgt_top1, cmp_top1)
+        tgt_top1_fmt, v_top1 = _evaluate_metric(top1_acc, tgt_top1, cmp_top1, is_pct=True)
         val_top1_fmt = f"**{top1_acc * 100:.1f}%**" if top1_acc is not None else "N/A"
 
         # Top 3 IP
-        tgt_top3 = t_attr.get("overall_top3_accuracy", {}).get("target", 0.90)
+        tgt_top3 = t_attr.get("overall_top3_accuracy", {}).get("target", 0.50)
         cmp_top3 = t_attr.get("overall_top3_accuracy", {}).get("comparator", ">=")
-        tgt_top3_fmt, v_top3 = _evaluate_metric(top3_acc, tgt_top3, cmp_top3)
+        tgt_top3_fmt, v_top3 = _evaluate_metric(top3_acc, tgt_top3, cmp_top3, is_pct=True)
         val_top3_fmt = f"**{top3_acc * 100:.1f}%**" if top3_acc is not None else "N/A"
 
         # Accuracy
         acc = s.get("accuracy")
-        tgt_acc = t_sup.get("accuracy", {}).get("target", 0.90)
+        tgt_acc = t_sup.get("accuracy", {}).get("target", 0.85)
         cmp_acc = t_sup.get("accuracy", {}).get("comparator", ">=")
-        tgt_acc_fmt, v_acc = _evaluate_metric(acc, tgt_acc, cmp_acc)
+        tgt_acc_fmt, v_acc = _evaluate_metric(acc, tgt_acc, cmp_acc, is_pct=True)
         val_acc_fmt = f"**{acc * 100:.1f}%**" if acc is not None else "N/A"
 
         # F1 Macro
         f1 = s.get("f1_macro")
-        tgt_f1 = t_sup.get("f1_macro", {}).get("target", 0.85)
+        tgt_f1 = t_sup.get("f1_macro", {}).get("target", 0.70)
         cmp_f1 = t_sup.get("f1_macro", {}).get("comparator", ">=")
-        tgt_f1_fmt, v_f1 = _evaluate_metric(f1, tgt_f1, cmp_f1)
+        tgt_f1_fmt, v_f1 = _evaluate_metric(f1, tgt_f1, cmp_f1, is_pct=True)
         val_f1_fmt = f"**{f1 * 100:.1f}%**" if f1 is not None else "N/A"
 
         # Separation Delta
         sep = h.get("anomaly_separation_delta")
         tgt_sep = t_unsup.get("anomaly_separation_delta", {}).get("target", 0.30)
         cmp_sep = t_unsup.get("anomaly_separation_delta", {}).get("comparator", ">=")
-        tgt_sep_fmt, v_sep = _evaluate_metric(sep, tgt_sep, cmp_sep)
+        tgt_sep_fmt, v_sep = _evaluate_metric(sep, tgt_sep, cmp_sep, is_pct=False, force_plus=True)
         val_sep_fmt = f"**+{sep:.3f}**" if sep is not None else "N/A"
 
         # Anomaly Flagged Ratio
         flag_ratio = h.get("flagged_as_anomalous_ratio")
-        tgt_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("target", 0.80)
+        tgt_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("target", 0.40)
         cmp_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("comparator", ">=")
-        tgt_flag_fmt, v_flag = _evaluate_metric(flag_ratio, tgt_flag, cmp_flag)
+        tgt_flag_fmt, v_flag = _evaluate_metric(flag_ratio, tgt_flag, cmp_flag, is_pct=True)
         val_flag_fmt = f"**{flag_ratio * 100:.1f}%**" if flag_ratio is not None else "N/A"
 
         fmt_prec = f"{c['pairwise_precision']:.4f}" if c.get("pairwise_precision") is not None else "N/A"

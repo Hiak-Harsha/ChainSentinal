@@ -1,0 +1,61 @@
+{
+  "evaluation_timestamp": 1789938766.3513653,
+  "telemetry": {
+    "total_observations": 6239,
+    "total_transactions": 1248,
+    "total_entities": 2515,
+    "total_alerts": 0,
+    "evaluation_runtime_sec": 6.396
+  },
+  "clustering": {
+    "evaluated_addresses": 936,
+    "true_entities_count": 206,
+    "discovered_entities_count": 848,
+    "pairwise_precision": 1.0,
+    "pairwise_recall": 0.0151,
+    "pairwise_f1": 0.0298,
+    "adjusted_rand_index": 0.0286,
+    "normalized_mutual_info": 0.7738
+  },
+  "attribution": {
+    "total_entities_evaluated": 270,
+    "overall_top1_accuracy": 0.4815,
+    "overall_top3_accuracy": 0.5407,
+    "by_obfuscation_level": {
+      "level_0": {
+        "total_entities": 116,
+        "top1_accuracy": 0.4741,
+        "top3_accuracy": 0.5259
+      },
+      "level_1": {
+        "total_entities": 73,
+        "top1_accuracy": 0.411,
+        "top3_accuracy": 0.4932
+      },
+      "level_2": {
+        "total_entities": 48,
+        "top1_accuracy": 0.5625,
+        "top3_accuracy": 0.5833
+      },
+      "level_3": {
+        "total_entities": 33,
+        "top1_accuracy": 0.5455,
+        "top3_accuracy": 0.6364
+      }
+    }
+  },
+  "supervised_classification": {
+    "accuracy": 0.8886679920477137,
+    "precision_macro": 0.6828474363640943,
+    "recall_macro": 0.677512478303886,
+    "f1_macro": 0.6780400378121999,
+    "f1_weighted": 0.8889221011299684
+  },
+  "unsupervised_holdout_experiment": {
+    "legitimate_anomaly_mean": 0.10392111364728157,
+    "holdout_anomaly_mean": 0.4655320006761675,
+    "anomaly_separation_delta": 0.36161088702888594,
+    "holdout_count": 164,
+    "flagged_as_anomalous_ratio": 0.4329268292682927
+  }
+}

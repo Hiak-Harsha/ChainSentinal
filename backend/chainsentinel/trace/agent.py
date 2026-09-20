@@ -7,6 +7,7 @@ import json
 import time
 from typing import Any
 
+from chainsentinel.evidence import canonical_hash, seal_evidence_bundle
 from chainsentinel.storage.db import DatabaseManager
 from chainsentinel.trace.pathfinder import InvestigativePathfinder
 from chainsentinel.trace.taint_tracker import TaintTracker
@@ -21,9 +22,8 @@ class AutonomousInvestigator:
         self.pathfinder = InvestigativePathfinder(db)
 
     def _canonical_hash(self, data: dict[str, Any]) -> str:
-        """Compute SHA-256 digest over canonical JSON representation."""
-        serialized = json.dumps(data, sort_keys=True, default=str)
-        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        """Compute SHA-256 digest over canonical JSON representation using evidence sealer."""
+        return canonical_hash(data)
 
     def _get_target_metadata(self, entity_id: str) -> dict[str, Any]:
         """Fetch entity risk, classification, and transaction volume statistics."""

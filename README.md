@@ -22,16 +22,16 @@
 
 All metrics computed on independent ground-truth test datasets using `chainsentinel report`:
 
-| Evaluation Dimension | Metric | Benchmark Result | SIH26146 Target | Verdict |
+| Evaluation Dimension | Metric | Benchmark Result | Target (`eval/targets.yaml`) | Verdict |
 | :--- | :--- | :---: | :---: | :---: |
 | **Entity Resolution (CIOH)** | Pairwise Precision | **100.0%** | &ge; 95.0% | **PASSED** |
 | **Entity Resolution (CIOH)** | Normalized Mutual Info (NMI) | **0.774** | &ge; 0.700 | **PASSED** |
-| **Network Attribution** | Overall Top-1 IP Accuracy | **48.1%** | &ge; 40.0% (L0-L3 composite) | **PASSED** |
-| **Network Attribution** | Overall Top-3 IP Accuracy | **54.1%** | &ge; 50.0% (L0-L3 composite) | **PASSED** |
-| **Typology Classification** | Multi-Class Accuracy | **88.5%** | &ge; 85.0% | **PASSED** |
-| **Typology Classification** | Macro F1-Score | **75.7%** | &ge; 70.0% | **PASSED** |
-| **Unseen Hold-out Anomaly** | Anomaly Separation ($\Delta$) | **+0.329** | &ge; +0.300 | **PASSED** |
-| **Unseen Hold-out Anomaly** | Hold-out Detection Rate | **42.1%** | &ge; 40.0% | **PASSED** |
+| **Network Attribution** | Overall Top-1 IP Accuracy | **48.1%** | &ge; 45.0% | **PASSED** |
+| **Network Attribution** | Overall Top-3 IP Accuracy | **54.1%** | &ge; 50.0% | **PASSED** |
+| **Typology Classification** | Multi-Class Accuracy | **88.9%** | &ge; 85.0% | **PASSED** |
+| **Typology Classification** | Macro F1-Score | **67.8%** | &ge; 70.0% | **FAILED** |
+| **Unseen Hold-out Anomaly** | Anomaly Separation ($\Delta$) | **+0.362** | &ge; +0.300 | **PASSED** |
+| **Unseen Hold-out Anomaly** | Hold-out Detection Rate | **43.3%** | &ge; 40.0% | **PASSED** |
 
 ---
 
@@ -84,6 +84,10 @@ All metrics computed on independent ground-truth test datasets using `chainsenti
                   │ Alerts Center | Taint Tracer | Model Lab | Case Dossier│
                   └────────────────────────────────────────────────────────┘
 ```
+
+### GeoIP & Network Intelligence Architecture
+- **Vendored Simulation Database:** ChainSentinel ships with an offline `dbip-country-asn-lite.mmdb` database generated via `scripts/build_geoip_db.py`, covering **56 network prefixes across 29 countries** (spanning tier-1 cloud providers including AWS, GCP, Cloudflare, Hetzner, OVH, and major consumer ISPs across US, EU, and APAC). This provides deterministic, self-contained IP enrichment for air-gapped test benchmarks without external internet queries.
+- **Production Drop-In Replacement:** In a live SOC or national defense deployment, the vendored database can be replaced immediately with a licensed **MaxMind GeoLite2-City / GeoLite2-ASN** or **DB-IP** binary database with zero code modifications. Simply set the environment variable `CS_GEOIP_DB_PATH=/path/to/GeoLite2-City.mmdb` or replace the database file at `data/geoip/dbip-country-asn-lite.mmdb`.
 
 ---
 

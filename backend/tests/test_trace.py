@@ -360,3 +360,30 @@ class TestTraceAPI:
         resp_single_case = client.get(f"/api/trace/cases/{case_id}")
         assert resp_single_case.status_code == 200
         assert resp_single_case.json()["case_id"] == case_id
+
+        # 8. GET /api/trace/cases/{case_id}/export/html
+        resp_export_html = client.get(f"/api/trace/cases/{case_id}/export/html")
+        assert resp_export_html.status_code == 200
+        assert "text/html" in resp_export_html.headers.get("content-type", "")
+        assert case_id in resp_export_html.text
+        assert "ChainSentinel Case Dossier" in resp_export_html.text
+        assert "SHA-256 SEAL" in resp_export_html.text
+
+        # 9. GET /api/trace/cases/{case_id}/export/csv
+        resp_export_csv = client.get(f"/api/trace/cases/{case_id}/export/csv")
+        assert resp_export_csv.status_code == 200
+        assert "text/csv" in resp_export_csv.headers.get("content-type", "")
+        assert "case_id,direction,hop_index" in resp_export_csv.text
+
+        # 10. GET /api/trace/cases/{case_id}/export?format=html & format=csv
+        assert client.get(f"/api/trace/cases/{case_id}/export?format=html").status_code == 200
+        assert client.get(f"/api/trace/cases/{case_id}/export?format=csv").status_code == 200
+
+        # 11. Evidence sealing & tamper verification
+        from chainsentinel.evidence import verify_bundle_integrity
+        evidence_bundle = case_data.get("evidence_bundle", {})
+        assert verify_bundle_integrity(evidence_bundle, expected_hash=case_data.get("bundle_hash")) is True
+        # Tampered bundle should fail
+        tampered_bundle = dict(evidence_bundle)
+        tampered_bundle["target_id"] = "TAMPERED_ENTITY"
+        assert verify_bundle_integrity(tampered_bundle, expected_hash=case_data.get("bundle_hash")) is False

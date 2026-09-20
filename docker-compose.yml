@@ -1,0 +1,25 @@
+services:
+  chainsentinel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chainsentinel
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - CS_AIR_GAPPED=true
+      - CS_HOST=0.0.0.0
+      - CS_PORT=8000
+      - CS_DB_PATH=/app/data/chainsentinel.duckdb
+      - CS_DATA_DIR=/app/data
+      - CS_FRONTEND_DIR=/app/frontend/out
+      - CS_GEOIP_DB_PATH=/app/data/geoip/dbip-country-asn-lite.mmdb
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

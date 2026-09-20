@@ -552,19 +552,19 @@ def report(
     act_nmi = f"{c['normalized_mutual_info']:.4f}" if "normalized_mutual_info" in c else "N/A"
     click.echo(f"  CIOH Normalized MI (NMI):{act_nmi}  (Target >= {tgt_nmi:.3f})")
 
-    tgt_t1 = t_attr.get("overall_top1_accuracy", {}).get("target", 0.80) * 100
+    tgt_t1 = t_attr.get("overall_top1_accuracy", {}).get("target", 0.45) * 100
     act_t1 = f"{float(top1)*100:.2f}%" if top1 is not None else "N/A"
     click.echo(f"  IP Attribution Top-1:    {act_t1}  (Target >= {tgt_t1:.1f}%)")
 
-    tgt_t3 = t_attr.get("overall_top3_accuracy", {}).get("target", 0.90) * 100
+    tgt_t3 = t_attr.get("overall_top3_accuracy", {}).get("target", 0.50) * 100
     act_t3 = f"{float(top3)*100:.2f}%" if top3 is not None else "N/A"
     click.echo(f"  IP Attribution Top-3:    {act_t3}  (Target >= {tgt_t3:.1f}%)")
 
-    tgt_acc = t_sup.get("accuracy", {}).get("target", 0.90) * 100
+    tgt_acc = t_sup.get("accuracy", {}).get("target", 0.85) * 100
     act_acc = f"{s['accuracy']*100:.2f}%" if "accuracy" in s else "N/A"
     click.echo(f"  Supervised Accuracy:     {act_acc}  (Target >= {tgt_acc:.1f}%)")
 
-    tgt_f1 = t_sup.get("f1_macro", {}).get("target", 0.85)
+    tgt_f1 = t_sup.get("f1_macro", {}).get("target", 0.70)
     act_f1 = f"{s['f1_macro']:.4f}" if "f1_macro" in s else "N/A"
     click.echo(f"  Supervised Macro F1:     {act_f1}  (Target >= {tgt_f1:.3f})")
 
@@ -572,7 +572,7 @@ def report(
     act_sep = f"+{h['anomaly_separation_delta']:.3f}" if "anomaly_separation_delta" in h else "N/A"
     click.echo(f"  Hold-out Anomaly Delta: {act_sep}  (Target >= +{tgt_sep:.3f})")
 
-    tgt_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("target", 0.80) * 100
+    tgt_flag = t_unsup.get("flagged_as_anomalous_ratio", {}).get("target", 0.40) * 100
     act_flag = f"{h['flagged_as_anomalous_ratio']*100:.2f}%" if "flagged_as_anomalous_ratio" in h else "N/A"
     click.echo(f"  Hold-out Detection Rate: {act_flag}  (Target >= {tgt_flag:.1f}%)")
     click.echo("========================================================")
