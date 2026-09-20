@@ -339,7 +339,8 @@ class TestModelPipelineAndAPI:
             settings.DB_PATH = Path(db.db_path)
             settings.MODELS_DIR = tmp_dir / "api_models"
 
-            client = TestClient(app)
+            from app.core.security import _ensure_api_key
+            client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
 
             # 1. Models train
             res_train = client.post("/api/models/train", json={"dataset_name": "cli_test"})

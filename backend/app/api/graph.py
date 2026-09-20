@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from chainsentinel.eval.cluster_eval import ClusterEvaluator
@@ -20,8 +20,8 @@ from chainsentinel.common.datasets import resolve_registered_ground_truth
 
 
 class ClusterRequest(BaseModel):
-    change_threshold: float = 0.75
-    min_coinjoin_outputs: int = 3
+    change_threshold: float = Field(0.75, ge=0.0, le=1.0, description="Change address confidence threshold")
+    min_coinjoin_outputs: int = Field(3, ge=2, le=20, description="Minimum outputs for CoinJoin detection")
     dataset_name: str | None = None
 
 
@@ -30,7 +30,7 @@ def _get_db() -> DatabaseManager:
 
 
 @router.post("/cluster")
-def trigger_clustering(req: ClusterRequest = ClusterRequest()) -> dict[str, Any]:
+def trigger_clustering(request: Request, req: ClusterRequest = ClusterRequest()) -> dict[str, Any]:
     """Run entity resolution (CIOH + CoinJoin exclusion + change heuristics) and build graph."""
     db = _get_db()
     resolver = EntityResolver(
@@ -76,7 +76,10 @@ def list_entities(
 def get_entity_detail(entity_id: str) -> dict[str, Any]:
     """Retrieve details, metrics, and member addresses of an entity."""
     db = _get_db()
-    ent = db.get_entity(entity_id)
+    try:
+        ent = db.get_entity(entity_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Entity {entity_id} not found")
     if not ent:
         raise HTTPException(status_code=404, detail=f"Entity {entity_id} not found")
     addresses = db.get_entity_addresses(entity_id, limit=100)
@@ -97,13 +100,27 @@ def get_subgraph(
 
 @router.get("/metrics")
 def get_evaluation_metrics(
-    ground_truth_path: str | None = Query(None),
+    dataset_name: str | None = Query(None, description="Server-registered dataset name"),
 ) -> dict[str, Any]:
     """Compute clustering accuracy (ARI, NMI, Precision, Recall) against ground truth."""
     db = _get_db()
-    gt_file = Path(ground_truth_path) if ground_truth_path else None
-    if not gt_file and (settings.DATA_DIR / "cli_test" / "ground_truth.json").exists():
-        gt_file = settings.DATA_DIR / "cli_test" / "ground_truth.json"
+
+    # Resolve server-side only — no raw filesystem paths accepted
+    gt_file: Path | None = None
+    try:
+        gt_file = resolve_registered_ground_truth(dataset_name)
+    except Exception:
+        gt_file = None
+
+    if not gt_file:
+        # Fallback to default locations
+        for candidate in [
+            settings.DATA_DIR / "cli_test" / "ground_truth.json",
+            settings.DATA_DIR / "samples" / "ground_truth.json",
+        ]:
+            if candidate.exists():
+                gt_file = candidate
+                break
 
     if not gt_file or not gt_file.exists():
         raise HTTPException(status_code=404, detail="Ground truth file not found")

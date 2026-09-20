@@ -290,7 +290,8 @@ class TestTraceAPI:
     def test_api_trace_and_cases_flow(self, prepared_db, monkeypatch):
         db, _ = prepared_db
         monkeypatch.setattr(settings, "DB_PATH", db.db_path)
-        client = TestClient(app)
+        from app.core.security import _ensure_api_key
+        client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
 
         entity_row = db.conn.execute("SELECT entity_id FROM entities ORDER BY member_count DESC LIMIT 1").fetchone()
         assert entity_row is not None

@@ -278,7 +278,8 @@ class TestGraphApiEndpoints:
     """Verify FastAPI graph and entity endpoints."""
 
     def test_api_workflow(self):
-        client = TestClient(app)
+        from app.core.security import _ensure_api_key
+        client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
 
         # 1. Ingest dataset first via direct pipeline or db
         from app.core.config import settings

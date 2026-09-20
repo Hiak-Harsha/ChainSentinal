@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import {
   Users,
   AlertTriangle,
@@ -11,6 +12,7 @@ import {
   Flame,
   Search,
 } from 'lucide-react';
+import { AnimatedNumber, CopyHash, Skeleton, StatusBadge } from './shared';
 
 export default function OverviewView({
   metrics,
@@ -30,15 +32,32 @@ export default function OverviewView({
     return r !== undefined && r >= 0.7;
   }).length;
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 12 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+  };
+
   return (
-    <div>
+    <motion.div variants={containerVariants} initial="hidden" animate="show">
       {/* Top Banner with Quick Actions */}
-      <div
+      <motion.div
+        variants={itemVariants}
         className="card"
         style={{
           marginBottom: '1.5rem',
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 58, 138, 0.25) 100%)',
-          border: '1px solid rgba(0, 242, 254, 0.25)',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.3) 100%)',
+          border: '1px solid rgba(0, 240, 255, 0.3)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.37)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
@@ -71,11 +90,11 @@ export default function OverviewView({
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* KPI Cards Grid */}
-      <div className="grid-4">
-        <div className="card kpi-card cyan">
+      <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
+        <motion.div variants={itemVariants} className="card kpi-card cyan">
           <div className="kpi-top">
             <span>Clustered Entities</span>
             <div className="kpi-icon-wrap" style={{ color: 'var(--cyan-primary)' }}>
@@ -83,14 +102,18 @@ export default function OverviewView({
             </div>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
-            {totalEntities !== null ? totalEntities.toLocaleString() : '—'}
+            {totalEntities !== null ? (
+              <AnimatedNumber value={totalEntities} />
+            ) : (
+              <Skeleton width="110px" height="2rem" />
+            )}
           </div>
           <div className="kpi-meta">
             CIOH + CoinJoin Anti-Collapse Clustered
           </div>
-        </div>
+        </motion.div>
 
-        <div className="card kpi-card crimson">
+        <motion.div variants={itemVariants} className="card kpi-card crimson">
           <div className="kpi-top">
             <span>High-Risk Alerts</span>
             <div className="kpi-icon-wrap" style={{ color: 'var(--crimson)' }}>
@@ -98,14 +121,14 @@ export default function OverviewView({
             </div>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--crimson)' }}>
-            {criticalCount}
+            <AnimatedNumber value={criticalCount} />
           </div>
           <div className="kpi-meta">
             {alerts.length} Total Ranked Leads (Risk &ge; 0.35)
           </div>
-        </div>
+        </motion.div>
 
-        <div className="card kpi-card emerald">
+        <motion.div variants={itemVariants} className="card kpi-card emerald">
           <div className="kpi-top">
             <span>Graph Connections</span>
             <div className="kpi-icon-wrap" style={{ color: 'var(--emerald)' }}>
@@ -113,14 +136,18 @@ export default function OverviewView({
             </div>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
-            {totalEdges !== null ? totalEdges.toLocaleString() : '—'}
+            {totalEdges !== null ? (
+              <AnimatedNumber value={totalEdges} />
+            ) : (
+              <Skeleton width="90px" height="2rem" />
+            )}
           </div>
           <div className="kpi-meta">
             Transfers, Spends, &amp; Shared Origin Links
           </div>
-        </div>
+        </motion.div>
 
-        <div className="card kpi-card purple">
+        <motion.div variants={itemVariants} className="card kpi-card purple">
           <div className="kpi-top">
             <span>Operator IP Attribution</span>
             <div className="kpi-icon-wrap" style={{ color: 'var(--purple-primary)' }}>
@@ -133,13 +160,13 @@ export default function OverviewView({
           <div className="kpi-meta">
             Hub De-Biased, Permutation p &le; 0.05
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Main Grid: Priority Alert Stream + Quick Investigation */}
       <div className="grid-2">
         {/* Left: Priority Threat Leads */}
-        <div className="card">
+        <motion.div variants={itemVariants} className="card">
           <div className="card-header">
             <div>
               <div className="card-title">
@@ -200,9 +227,7 @@ export default function OverviewView({
                           </span>
                         </td>
                         <td>
-                          <span className="mono" style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                            {a.entity_id}
-                          </span>
+                          <CopyHash value={a.entity_id} label="Entity ID" truncateLength={6} />
                         </td>
                         <td>
                           <span style={{ fontSize: '0.8rem', color: 'var(--cyan-primary)' }}>
@@ -210,17 +235,7 @@ export default function OverviewView({
                           </span>
                         </td>
                         <td>
-                          <span
-                            className={`badge-grade ${
-                              grade === 'A'
-                                ? 'badge-grade-a'
-                                : grade === 'B'
-                                ? 'badge-grade-b'
-                                : 'badge-grade-c'
-                            }`}
-                          >
-                            {grade}
-                          </span>
+                          <StatusBadge status={grade} size="sm" showDot={false} />
                         </td>
                         <td>
                           <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -242,10 +257,10 @@ export default function OverviewView({
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
 
         {/* Right: Forensic Platform Posture & Architecture */}
-        <div className="card">
+        <motion.div variants={itemVariants} className="card">
           <div className="card-header">
             <div>
               <div className="card-title">
@@ -347,8 +362,8 @@ export default function OverviewView({
               <span className="badge badge-emerald">Operational</span>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from chainsentinel.correlate.engine import CorrelationEngine
@@ -20,9 +20,9 @@ from chainsentinel.common.datasets import resolve_registered_ground_truth
 
 
 class CorrelateRunRequest(BaseModel):
-    time_window_sec: float = 60.0
-    p_value_thresh: float = 0.05
-    num_permutations: int = 100
+    time_window_sec: float = Field(60.0, gt=0, le=3600, description="Temporal correlation window in seconds")
+    p_value_thresh: float = Field(0.05, gt=0, le=1.0, description="Significance threshold for permutation test")
+    num_permutations: int = Field(100, ge=10, le=10000, description="Number of Monte Carlo permutation rounds")
     dataset_name: str | None = None
 
 
@@ -31,7 +31,7 @@ def _get_db() -> DatabaseManager:
 
 
 @router.post("/run")
-def trigger_correlation(req: CorrelateRunRequest = CorrelateRunRequest()) -> dict[str, Any]:
+def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRunRequest()) -> dict[str, Any]:
     """Run full network-blockchain correlation engine and persist results."""
     db = _get_db()
     engine = CorrelationEngine(
@@ -90,7 +90,10 @@ def list_operator_links(
 def get_entity_signature(entity_id: str) -> dict[str, Any]:
     """Retrieve behavioral network signatures (ports, churn, circadian entropy) for an entity."""
     db = _get_db()
-    sig = db.get_entity_network_signatures(entity_id)
+    try:
+        sig = db.get_entity_network_signatures(entity_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"No network signatures for entity {entity_id}")
     if not sig:
         raise HTTPException(status_code=404, detail=f"No network signatures for entity {entity_id}")
     return sig
@@ -98,13 +101,26 @@ def get_entity_signature(entity_id: str) -> dict[str, Any]:
 
 @router.get("/metrics")
 def get_correlation_metrics(
-    ground_truth_path: str | None = Query(None),
+    dataset_name: str | None = Query(None, description="Server-registered dataset name"),
 ) -> dict[str, Any]:
     """Compute IP attribution accuracy benchmarks against ground truth."""
     db = _get_db()
-    gt_file = Path(ground_truth_path) if ground_truth_path else None
-    if not gt_file and (settings.DATA_DIR / "cli_test" / "ground_truth.json").exists():
-        gt_file = settings.DATA_DIR / "cli_test" / "ground_truth.json"
+
+    # Resolve server-side only — no raw filesystem paths accepted
+    gt_file: Path | None = None
+    try:
+        gt_file = resolve_registered_ground_truth(dataset_name)
+    except Exception:
+        gt_file = None
+
+    if not gt_file:
+        for candidate in [
+            settings.DATA_DIR / "cli_test" / "ground_truth.json",
+            settings.DATA_DIR / "samples" / "ground_truth.json",
+        ]:
+            if candidate.exists():
+                gt_file = candidate
+                break
 
     if not gt_file or not gt_file.exists():
         raise HTTPException(status_code=404, detail="Ground truth file not found")

@@ -32,6 +32,22 @@
   --crimson: #ef4444;
   --crimson-glow: rgba(239, 68, 68, 0.4);
 
+  /* Semantic Risk Mapping */
+  --risk-critical: #ef4444;
+  --risk-critical-bg: rgba(239, 68, 68, 0.12);
+  --risk-high: #f59e0b;
+  --risk-high-bg: rgba(245, 158, 11, 0.12);
+  --risk-low: #10b981;
+  --risk-low-bg: rgba(16, 185, 129, 0.12);
+
+  /* Entity Type Colors */
+  --entity-wallet: #3b82f6;
+  --entity-exchange: #10b981;
+  --entity-mixer: #f59e0b;
+  --entity-unknown: #64748b;
+  --entity-service: #8b5cf6;
+  --entity-mining: #06b6d4;
+
   /* Text Colors */
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
@@ -46,6 +62,12 @@
   --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   --shadow-glow-cyan: 0 0 15px rgba(0, 242, 254, 0.25);
   --shadow-glow-crimson: 0 0 15px rgba(239, 68, 68, 0.3);
+
+  /* Motion Timing */
+  --motion-fast: 150ms;
+  --motion-base: 280ms;
+  --motion-slow: 500ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 *, *::before, *::after {
@@ -709,3 +731,125 @@ h1, h2, h3, h4, h5, h6 {
   font-family: monospace;
   color: var(--text-main);
 }
+
+/* ==========================================================================
+   Skeleton Loader
+   ========================================================================== */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text { height: 1em; margin-bottom: 0.5em; }
+.skeleton-text-sm { height: 0.75em; width: 60%; }
+.skeleton-kpi { height: 2.5rem; width: 80px; margin: 0.5rem 0; }
+.skeleton-card { height: 120px; }
+
+/* ==========================================================================
+   Toast Notifications
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-card);
+  max-width: 380px;
+}
+
+.toast-error {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.toast-success {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.toast-info {
+  background: rgba(0, 242, 254, 0.1);
+  border-color: rgba(0, 242, 254, 0.25);
+  color: var(--cyan-primary);
+}
+
+.toast-warning {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+/* ==========================================================================
+   Risk Utilities
+   ========================================================================== */
+.risk-critical { color: var(--risk-critical); }
+.risk-high { color: var(--risk-high); }
+.risk-low { color: var(--risk-low); }
+
+.risk-bg-critical { background: var(--risk-critical-bg); border-color: rgba(239, 68, 68, 0.2); }
+.risk-bg-high { background: var(--risk-high-bg); border-color: rgba(245, 158, 11, 0.2); }
+.risk-bg-low { background: var(--risk-low-bg); border-color: rgba(16, 185, 129, 0.2); }
+
+/* Entity type color mapping */
+.entity-wallet { color: var(--entity-wallet); }
+.entity-exchange { color: var(--entity-exchange); }
+.entity-mixer { color: var(--entity-mixer); }
+.entity-unknown { color: var(--entity-unknown); }
+.entity-service { color: var(--entity-service); }
+.entity-mining { color: var(--entity-mining); }
+
+/* ==========================================================================
+   Taint Flow Edge Animation (for Cytoscape/Graph overlays)
+   ========================================================================== */
+@keyframes taint-pulse {
+  0% { stroke-dashoffset: 20; opacity: 0.6; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+.taint-edge-animated {
+  stroke-dasharray: 10 5;
+  animation: taint-pulse 1s linear infinite;
+}
+
+/* ==========================================================================
+   Tab Active Indicator
+   ========================================================================== */
+.nav-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: var(--cyan-primary);
+  box-shadow: var(--shadow-glow-cyan);
+  border-radius: var(--radius-full);
+}
+

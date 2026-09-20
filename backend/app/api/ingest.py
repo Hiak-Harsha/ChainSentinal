@@ -6,12 +6,15 @@ import asyncio
 from collections.abc import AsyncGenerator
 import json
 from pathlib import Path
+import re
 import time
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from chainsentinel.ingest.pipeline import IngestPipeline, detect_parser
@@ -23,6 +26,9 @@ router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 # Shared in-memory state for active jobs and progress channels
 _active_progress: dict[str, dict[str, Any]] = {}
 _progress_events: dict[str, asyncio.Queue] = {}
+
+# Allowed upload extensions
+_ALLOWED_EXTENSIONS = {".csv", ".json", ".xml"}
 
 
 class SchemaDetectRequest(BaseModel):
@@ -42,6 +48,56 @@ class IngestJobStartRequest(BaseModel):
 
 def _get_db() -> DatabaseManager:
     return DatabaseManager(db_path=settings.DB_PATH)
+
+
+def _validate_filename(filename: str) -> str:
+    """Sanitize and validate an uploaded filename. Returns safe name or raises HTTPException."""
+    safe_name = Path(filename).name
+
+    # Reject null bytes
+    if "\x00" in safe_name:
+        raise HTTPException(status_code=415, detail="Filename contains null bytes")
+
+    # Reject non-printable / control characters
+    if re.search(r"[\x00-\x1f\x7f]", safe_name):
+        raise HTTPException(status_code=415, detail="Filename contains non-printable characters")
+
+    # Check extension
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"File type '{suffix}' not allowed. Accepted: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
+        )
+
+    # Reject double extensions (e.g., data.csv.exe)
+    name_parts = safe_name.split(".")
+    if len(name_parts) > 2:
+        # Check if any intermediate "extension" is suspicious
+        suspicious_exts = {".exe", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".com", ".msi", ".vbs", ".js"}
+        for part in name_parts[1:]:
+            if f".{part.lower()}" in suspicious_exts:
+                raise HTTPException(status_code=415, detail=f"Suspicious double extension detected in '{safe_name}'")
+
+    return safe_name
+
+
+async def _read_upload_with_limit(uploaded_file, max_bytes: int) -> bytes:
+    """Stream-read an uploaded file with size enforcement. Raises 413 if exceeded."""
+    chunks = []
+    total = 0
+    while True:
+        chunk = await uploaded_file.read(65536)  # 64 KB chunks
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum allowed size of {max_bytes // (1024*1024)} MB",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @router.post("/detect-schema")
@@ -64,10 +120,14 @@ async def detect_schema(
         upload_dir = settings.DATA_DIR / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
         filename = getattr(uploaded_file, "filename", "uploaded_file")
-        # Sanitize filename
-        safe_name = Path(filename).name
+
+        # Validate filename
+        safe_name = _validate_filename(filename)
+
+        # Stream-read with size limit
+        content = await _read_upload_with_limit(uploaded_file, settings.MAX_UPLOAD_BYTES)
+
         temp_path = upload_dir / f"preview_{int(time.time()*1000)}_{safe_name}"
-        content = await uploaded_file.read()
         with open(temp_path, "wb") as f:
             f.write(content)
         target_path = temp_path
@@ -175,18 +235,24 @@ def _run_ingest_task(
 
 @router.post("/upload")
 async def upload_dataset(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     profile_name: str | None = Query(None),
 ) -> dict[str, Any]:
     """Upload a dataset file and start asynchronous ingestion."""
+    # Validate filename
+    safe_name = _validate_filename(file.filename or "unknown")
+
+    # Stream-read with size limit
+    content = await _read_upload_with_limit(file, settings.MAX_UPLOAD_BYTES)
+
     upload_dir = settings.DATA_DIR / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     job_id = f"job_{int(time.time() * 1000)}"
-    dest_path = upload_dir / f"{job_id}_{file.filename}"
+    dest_path = upload_dir / f"{job_id}_{safe_name}"
 
     with open(dest_path, "wb") as f:
-        content = await file.read()
         f.write(content)
 
     db = _get_db()
@@ -213,7 +279,7 @@ async def upload_dataset(
 
     return {
         "job_id": job_id,
-        "file_name": file.filename,
+        "file_name": safe_name,
         "status": "started",
         "progress_url": f"/api/ingest/progress/{job_id}",
     }

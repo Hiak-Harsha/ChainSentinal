@@ -230,7 +230,8 @@ class TestCorrelateApiEndpoints:
     """Verify FastAPI correlation endpoints."""
 
     def test_api_workflow(self):
-        client = TestClient(app)
+        from app.core.security import _ensure_api_key
+        client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
 
         # 1. Ingest & cluster on DB
         from app.core.config import settings

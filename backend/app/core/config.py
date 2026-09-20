@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
 
+    # Authentication
+    API_KEY: str = ""
+
+    # Upload limits
+    MAX_UPLOAD_BYTES: int = 524_288_000  # 500 MB
+
     # Paths
     DATA_DIR: Path = Path("data")
     DB_PATH: Path = Path("data/chainsentinel.duckdb")

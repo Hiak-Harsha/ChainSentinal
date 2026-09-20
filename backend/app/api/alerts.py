@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from chainsentinel.storage.db import DatabaseManager
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
+# Valid triage statuses per NTRO Section 7
+VALID_STATUSES = {"NEW", "INVESTIGATING", "ESCALATED", "CLOSED_FALSE_POSITIVE", "RESOLVED"}
+
 
 class AlertStatusUpdate(BaseModel):
-    status: str
+    status: Literal["NEW", "INVESTIGATING", "ESCALATED", "CLOSED_FALSE_POSITIVE", "RESOLVED"] = Field(
+        ..., description="Triage status per NTRO Section 7 contract"
+    )
 
 
 @router.get("")
@@ -41,7 +46,10 @@ def list_alerts(
 def get_alert_detail(alert_id: str) -> dict[str, Any]:
     """Retrieve full investigative alert bundle by alert_id."""
     db = DatabaseManager(settings.DB_PATH)
-    alert = db.get_alert(alert_id)
+    try:
+        alert = db.get_alert(alert_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found.")
     if not alert:
         raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found.")
     return alert.get("alert_data", alert)
@@ -50,13 +58,7 @@ def get_alert_detail(alert_id: str) -> dict[str, Any]:
 @router.post("/{alert_id}/status")
 def update_alert_status(alert_id: str, payload: AlertStatusUpdate) -> dict[str, Any]:
     """Update operational triage status of an alert."""
-    valid_statuses = {"NEW", "INVESTIGATING", "ESCALATED", "CLOSED_FALSE_POSITIVE", "RESOLVED"}
-    new_status = payload.status.upper()
-    if new_status not in valid_statuses:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid status '{payload.status}'. Must be one of {sorted(valid_statuses)}",
-        )
+    new_status = payload.status
 
     db = DatabaseManager(settings.DB_PATH)
     alert = db.get_alert(alert_id)

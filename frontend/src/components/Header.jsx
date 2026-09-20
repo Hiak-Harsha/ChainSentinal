@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import {
   ShieldAlert,
   LayoutDashboard,
@@ -23,13 +24,19 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
     { id: 'ingest', label: 'Ingest Wizard', icon: UploadCloud },
   ];
 
+  const isOnline = health?.status === 'ok';
+
   return (
     <header>
       <div className="app-header">
         <div className="brand-section">
-          <div className="brand-logo">
+          <motion.div
+            className="brand-logo"
+            whileHover={{ scale: 1.05, rotate: 2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+          >
             <ShieldAlert size={22} />
-          </div>
+          </motion.div>
           <div className="brand-titles">
             <div className="brand-name">
               ChainSentinel
@@ -43,15 +50,21 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
 
         <div className="header-status-bar">
           <div className="status-pill">
-            <span className="pulse-dot"></span>
-            <span style={{ color: 'var(--emerald)' }}>
-              {health?.status === 'ok' ? 'BACKEND ONLINE' : 'CONNECTING...'}
+            <span
+              className="pulse-dot"
+              style={{
+                backgroundColor: isOnline ? 'var(--emerald, #10b981)' : '#f43f5e',
+                boxShadow: `0 0 8px ${isOnline ? 'var(--emerald, #10b981)' : '#f43f5e'}`,
+              }}
+            />
+            <span style={{ color: isOnline ? 'var(--emerald, #10b981)' : '#f43f5e' }}>
+              {isOnline ? 'BACKEND ONLINE' : 'OFFLINE / DISCONNECTED'}
             </span>
           </div>
 
           <div className="status-pill">
             <Lock size={13} style={{ color: 'var(--cyan-primary)' }} />
-            <span>STRICT OFFLINE (AIR-GAPPED)</span>
+            <span>STRICT AIR-GAP ISOLATION</span>
           </div>
 
           <div className="status-pill">
@@ -61,7 +74,7 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
         </div>
       </div>
 
-      <nav className="app-nav">
+      <nav className="app-nav" style={{ position: 'relative' }}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -71,10 +84,34 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
               id={`tab-btn-${tab.id}`}
               className={`nav-tab-btn ${isActive ? 'active' : ''}`}
               onClick={() => setActiveTab(tab.id)}
+              style={{ position: 'relative', zIndex: 1 }}
             >
+              {isActive && (
+                <motion.div
+                  layoutId="activeNavTabIndicator"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundColor: 'rgba(0, 240, 255, 0.08)',
+                    borderRadius: '6px',
+                    borderBottom: '2px solid var(--cyan-primary)',
+                    zIndex: -1,
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
               <Icon size={16} />
               <span>{tab.label}</span>
-              {tab.badge > 0 && <span className="nav-tab-badge">{tab.badge}</span>}
+              {tab.badge > 0 && (
+                <motion.span
+                  className="nav-tab-badge"
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  key={tab.badge}
+                >
+                  {tab.badge}
+                </motion.span>
+              )}
             </button>
           );
         })}

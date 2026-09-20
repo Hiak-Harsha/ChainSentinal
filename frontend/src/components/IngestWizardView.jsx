@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   UploadCloud,
   FileCheck2,
-  FileX2,
-  CheckCircle2,
   RefreshCw,
-  FolderOpen,
-  ArrowRight,
   ShieldCheck,
+  CheckCircle2,
+  Database,
+  FileCode,
 } from 'lucide-react';
 import { api } from '../api';
+import { AnimatedNumber, CopyHash, StatusBadge, useToast } from './shared';
 
 export default function IngestWizardView() {
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const toast = useToast();
 
   const loadData = async () => {
     setLoading(true);
@@ -31,6 +33,7 @@ export default function IngestWizardView() {
       }
     } catch (err) {
       console.error('Failed to load ingest data:', err);
+      toast?.showToast('Failed to load ingestion telemetry', 'error');
     } finally {
       setLoading(false);
     }
@@ -41,7 +44,7 @@ export default function IngestWizardView() {
   }, []);
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Header Bar */}
       <div
         className="card"
@@ -52,6 +55,7 @@ export default function IngestWizardView() {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
         <div>
@@ -76,7 +80,7 @@ export default function IngestWizardView() {
         <div className="card">
           <div className="card-header">
             <div>
-              <div className="card-title">
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FileCheck2 size={18} style={{ color: 'var(--emerald)' }} />
                 Ingestion Jobs History ({jobs.length})
               </div>
@@ -109,12 +113,13 @@ export default function IngestWizardView() {
                     <tr
                       key={j.job_id}
                       onClick={() => setSelectedJob(j)}
-                      style={{ cursor: 'pointer' }}
+                      style={{
+                        cursor: 'pointer',
+                        backgroundColor: selectedJob?.job_id === j.job_id ? 'rgba(0, 240, 255, 0.05)' : 'transparent',
+                      }}
                     >
                       <td>
-                        <span className="mono" style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.78rem' }}>
-                          {j.job_id}
-                        </span>
+                        <CopyHash value={j.job_id} label="Job ID" truncateLength={5} />
                       </td>
                       <td>
                         <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>
@@ -136,9 +141,10 @@ export default function IngestWizardView() {
                         </span>
                       </td>
                       <td>
-                        <span className="badge badge-emerald">
-                          {j.status || 'COMPLETED'}
-                        </span>
+                        <StatusBadge
+                          status={j.status === 'completed' || j.status === 'COMPLETED' ? 'RESOLVED' : j.status || 'NEW'}
+                          size="sm"
+                        />
                       </td>
                     </tr>
                   ))
@@ -152,7 +158,7 @@ export default function IngestWizardView() {
         <div className="card">
           <div className="card-header">
             <div>
-              <div className="card-title">
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <ShieldCheck size={18} style={{ color: 'var(--cyan-primary)' }} />
                 Data Quality &amp; Quarantine Audit
               </div>
@@ -165,9 +171,9 @@ export default function IngestWizardView() {
           {selectedJob ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ padding: '0.85rem 1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.82rem' }}>
                   <span style={{ color: 'var(--text-dim)' }}>Selected Job:</span>
-                  <span className="mono" style={{ color: '#fff', fontWeight: 600 }}>{selectedJob.job_id}</span>
+                  <CopyHash value={selectedJob.job_id} label="Job ID" />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.82rem' }}>
                   <span style={{ color: 'var(--text-dim)' }}>Source Path:</span>

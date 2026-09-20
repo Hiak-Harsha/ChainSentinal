@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
   Search,
   Filter,
-  Copy,
-  Check,
-  ExternalLink,
   ShieldAlert,
   GitBranch,
   FileCheck,
   Radio,
   Clock,
   X,
+  Sliders,
 } from 'lucide-react';
 import { api } from '../api';
+import { CopyHash, RiskGauge, StatusBadge, useToast } from './shared';
 
 export default function AlertCenterView({
   alerts = [],
@@ -28,8 +28,8 @@ export default function AlertCenterView({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [gradeFilter, setGradeFilter] = useState('ALL');
   const [minRisk, setMinRisk] = useState(0.0);
-  const [copiedHash, setCopiedHash] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const toast = useToast();
 
   // Filter alerts
   const filteredAlerts = alerts.filter((a) => {
@@ -49,26 +49,20 @@ export default function AlertCenterView({
     return matchesSearch && matchesStatus && matchesGrade && matchesRisk;
   });
 
-  const handleCopyHash = (hash) => {
-    navigator.clipboard.writeText(hash);
-    setCopiedHash(true);
-    setTimeout(() => setCopiedHash(false), 2000);
-  };
-
   const handleUpdateStatus = async (alertId, newStatus) => {
     setUpdatingStatus(true);
     try {
       await api.updateAlertStatus(alertId, newStatus);
       if (onStatusUpdated) onStatusUpdated(alertId, newStatus);
     } catch (err) {
-      alert(`Failed to update status: ${err.message}`);
+      toast?.showToast(`Failed to update status: ${err.message}`, 'error');
     } finally {
       setUpdatingStatus(false);
     }
   };
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Search & Filter Toolbar */}
       <div
         className="card"
@@ -79,13 +73,20 @@ export default function AlertCenterView({
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: '280px' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search
               size={16}
-              style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
+              style={{
+                position: 'absolute',
+                left: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-dim)',
+              }}
             />
             <input
               type="text"
@@ -117,6 +118,7 @@ export default function AlertCenterView({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            <Sliders size={15} />
             <span>Grade:</span>
             <select
               className="select"
@@ -131,7 +133,7 @@ export default function AlertCenterView({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            <span>Min Priority:</span>
+            <span>Min Risk:</span>
             <select
               className="select"
               value={minRisk}
@@ -154,7 +156,7 @@ export default function AlertCenterView({
               Ranked Investigative Leads ({filteredAlerts.length})
             </div>
             <div className="card-subtitle">
-              Section 7 NTRO Compliance with Conformal Set Bounds &amp; SHAP Rationale
+              Section 7 NTRO Compliance with Conformal Set Bounds &amp; TreeSHAP Rationale
             </div>
           </div>
         </div>
@@ -163,7 +165,7 @@ export default function AlertCenterView({
           <table className="table">
             <thead>
               <tr>
-                <th>Priority</th>
+                <th style={{ width: '130px' }}>Risk Score</th>
                 <th>Alert ID</th>
                 <th>Entity Target</th>
                 <th>Detected Typology</th>
@@ -182,41 +184,23 @@ export default function AlertCenterView({
                 </tr>
               ) : (
                 filteredAlerts.map((a) => {
-                  const priority = a.priority ?? a.risk_score ?? null;
+                  const priority = a.priority ?? a.risk_score ?? 0;
                   const topTyp = a.typologies?.[0]?.name || 'UNKNOWN';
-                  const topStr = a.typologies?.[0]?.strength ?? null;
-                  const grade = a.confidence?.grade || '—';
+                  const topStr = a.typologies?.[0]?.strength ?? 0;
+                  const grade = a.confidence?.grade || 'B';
                   const ip = a.attribution?.ip || 'N/A';
                   const status = a.status || 'NEW';
 
                   return (
                     <tr key={a.alert_id}>
                       <td>
-                        {priority !== null ? (
-                          <span
-                            className={`badge ${
-                              priority > 0.7
-                                ? 'badge-crimson'
-                                : priority > 0.4
-                                ? 'badge-amber'
-                                : 'badge-emerald'
-                            }`}
-                          >
-                            {(priority * 100).toFixed(0)}%
-                          </span>
-                        ) : (
-                          <span className="badge badge-outline">—</span>
-                        )}
+                        <RiskGauge score={priority} variant="bar" size="sm" showLabel={false} />
                       </td>
                       <td>
-                        <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          {a.alert_id}
-                        </span>
+                        <CopyHash value={a.alert_id} label="Alert ID" truncateLength={5} />
                       </td>
                       <td>
-                        <span className="mono" style={{ fontWeight: 700, color: '#fff' }}>
-                          {a.entity_id}
-                        </span>
+                        <CopyHash value={a.entity_id} label="Entity Target" truncateLength={6} />
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -229,18 +213,12 @@ export default function AlertCenterView({
                         </div>
                       </td>
                       <td>
-                        <span
-                          className={`badge-grade ${
-                            grade === 'A'
-                              ? 'badge-grade-a'
-                              : grade === 'B'
-                              ? 'badge-grade-b'
-                              : 'badge-grade-c'
-                          }`}
-                          title={`Conformal Set: ${a.confidence?.conformal_set?.join(', ') || 'N/A'}`}
-                        >
-                          {grade}
-                        </span>
+                        <StatusBadge
+                          status={grade}
+                          size="sm"
+                          showDot={false}
+                          className="font-bold"
+                        />
                       </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -255,19 +233,7 @@ export default function AlertCenterView({
                         </div>
                       </td>
                       <td>
-                        <span
-                          className={`badge ${
-                            status === 'ESCALATED'
-                              ? 'badge-crimson'
-                              : status === 'INVESTIGATING'
-                              ? 'badge-cyan'
-                              : status === 'RESOLVED'
-                              ? 'badge-emerald'
-                              : 'badge-amber'
-                          }`}
-                        >
-                          {status}
-                        </span>
+                        <StatusBadge status={status} size="sm" />
                       </td>
                       <td>
                         <button
@@ -287,271 +253,300 @@ export default function AlertCenterView({
       </div>
 
       {/* Deep Dive Modal Dialog */}
-      {selectedAlert && (
-        <div className="modal-backdrop" onClick={onCloseDetail}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div
+      <AnimatePresence>
+        {selectedAlert && (
+          <motion.div
+            className="modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onCloseDetail}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(6, 9, 17, 0.75)',
+              backdropFilter: 'blur(6px)',
+              zIndex: 999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1.5rem',
+            }}
+          >
+            <motion.div
+              className="modal-card"
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
               style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid var(--border-subtle)',
-                paddingBottom: '1rem',
-                marginBottom: '1.25rem',
+                width: '100%',
+                maxWidth: '920px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                backgroundColor: '#0b1120',
+                border: '1px solid rgba(0, 240, 255, 0.25)',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
               }}
             >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <ShieldAlert size={20} style={{ color: 'var(--crimson)' }} />
-                  <h3 style={{ fontSize: '1.2rem', color: '#fff' }}>
-                    Investigative Dossier: {selectedAlert.entity_id}
-                  </h3>
-                </div>
-                <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                  Alert ID: {selectedAlert.alert_id} &bull; Priority:{' '}
-                  {selectedAlert.priority != null
-                    ? `${(selectedAlert.priority * 100).toFixed(1)}%`
-                    : selectedAlert.risk_score != null
-                    ? `${(selectedAlert.risk_score * 100).toFixed(1)}%`
-                    : '—'}
-                </div>
-              </div>
-
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={onCloseDetail}
-                style={{ padding: '0.35rem 0.5rem' }}
+              {/* Modal Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  paddingBottom: '1rem',
+                  marginBottom: '1.25rem',
+                }}
               >
-                <X size={16} />
-              </button>
-            </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <ShieldAlert size={22} style={{ color: 'var(--crimson)' }} />
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
+                      Investigative Dossier: {selectedAlert.entity_id}
+                    </h3>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Alert:</span>
+                    <CopyHash value={selectedAlert.alert_id} label="Alert ID" truncateLength={8} />
+                  </div>
+                </div>
 
-            {/* Quick Actions & Triage Status Bar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-                background: 'rgba(255, 255, 255, 0.02)',
-                padding: '0.75rem 1rem',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '1.25rem',
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-                <Clock size={15} style={{ color: 'var(--cyan-primary)' }} />
-                <span>Triage Status:</span>
-                <select
-                  className="select"
-                  value={selectedAlert.status || 'NEW'}
-                  disabled={updatingStatus}
-                  onChange={(e) => handleUpdateStatus(selectedAlert.alert_id, e.target.value)}
-                >
-                  <option value="NEW">NEW</option>
-                  <option value="INVESTIGATING">INVESTIGATING</option>
-                  <option value="ESCALATED">ESCALATED</option>
-                  <option value="RESOLVED">RESOLVED</option>
-                  <option value="CLOSED_FALSE_POSITIVE">FALSE POSITIVE</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => onLaunchTrace(selectedAlert.entity_id)}
-                >
-                  <GitBranch size={14} />
-                  Trace Taint Flows
-                </button>
                 <button
                   className="btn btn-secondary btn-sm"
-                  onClick={() => onLaunchInvestigate(selectedAlert.entity_id)}
+                  onClick={onCloseDetail}
+                  style={{ padding: '0.35rem 0.5rem' }}
+                  aria-label="Close detail modal"
                 >
-                  <FileCheck size={14} />
-                  Build Case Dossier
+                  <X size={18} />
                 </button>
               </div>
-            </div>
 
-            {/* Modal Body: 2 Columns */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
-              {/* Left Column: AI Decision & Conformal Guarantees */}
-              <div>
-                {/* Conformal Reliability Card */}
-                <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: 'var(--text-main)' }}>
-                    Conformal Mathematical Reliability
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
-                    <div
-                      className={`badge-grade ${
-                        selectedAlert.confidence?.grade === 'A'
-                          ? 'badge-grade-a'
-                          : selectedAlert.confidence?.grade === 'B'
-                          ? 'badge-grade-b'
-                          : 'badge-grade-c'
-                      }`}
-                      style={{ width: '38px', height: '38px', fontSize: '1.2rem' }}
-                    >
-                      {selectedAlert.confidence?.grade || 'B'}
+              {/* Quick Actions & Triage Status Bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  padding: '0.75rem 1rem',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '1.25rem',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem' }}>
+                  <Clock size={15} style={{ color: 'var(--cyan-primary)' }} />
+                  <span>Triage Status:</span>
+                  <select
+                    className="select"
+                    value={selectedAlert.status || 'NEW'}
+                    disabled={updatingStatus}
+                    onChange={(e) => handleUpdateStatus(selectedAlert.alert_id, e.target.value)}
+                  >
+                    <option value="NEW">NEW</option>
+                    <option value="INVESTIGATING">INVESTIGATING</option>
+                    <option value="ESCALATED">ESCALATED</option>
+                    <option value="RESOLVED">RESOLVED</option>
+                    <option value="CLOSED_FALSE_POSITIVE">FALSE POSITIVE</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => onLaunchTrace(selectedAlert.entity_id)}
+                  >
+                    <GitBranch size={14} />
+                    Trace Taint Flows
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onLaunchInvestigate(selectedAlert.entity_id)}
+                  >
+                    <FileCheck size={14} />
+                    Build Case Dossier
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body: 2 Columns */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+                {/* Left Column: AI Decision & Conformal Guarantees */}
+                <div>
+                  {/* Risk & Conformal Reliability Card */}
+                  <div className="card" style={{ marginBottom: '1rem', padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '1rem', color: 'var(--text-main)' }}>
+                      Risk Magnitude &amp; Statistical Reliability
                     </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>
-                        Grade {selectedAlert.confidence?.grade || 'B'} Classification
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', marginBottom: '1.25rem' }}>
+                      <RiskGauge
+                        score={selectedAlert.priority ?? selectedAlert.risk_score ?? 0}
+                        variant="radial"
+                        size="lg"
+                      />
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem' }}>
+                        <StatusBadge
+                          status={selectedAlert.confidence?.grade || 'B'}
+                          size="md"
+                          showDot={false}
+                          className="font-bold"
+                        />
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                          Conformal Reliability
+                        </span>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.75rem' }}>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
                         Guaranteed 90% coverage prediction set:
                       </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                        {selectedAlert.confidence?.conformal_set?.map((cls) => (
+                          <span key={cls} className="badge badge-cyan" style={{ fontSize: '0.7rem' }}>
+                            {cls.replace('T', '').replace(/_/g, ' ')}
+                          </span>
+                        )) || <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>No set recorded</span>}
+                      </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                    {selectedAlert.confidence?.conformal_set?.map((cls) => (
-                      <span key={cls} className="badge badge-cyan" style={{ fontSize: '0.7rem' }}>
-                        {cls.replace('T', '').replace(/_/g, ' ')}
-                      </span>
-                    )) || <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>No set recorded</span>}
-                  </div>
-                </div>
-
-                {/* Network Attribution Card */}
-                <div className="card" style={{ padding: '1rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <Radio size={16} style={{ color: 'var(--purple-primary)' }} />
-                    Network-Layer Attribution
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.82rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-dim)' }}>Estimated Origin IP:</span>
-                      <span className="mono" style={{ fontWeight: 700, color: 'var(--cyan-primary)' }}>
-                        {selectedAlert.attribution?.ip || 'N/A'}
-                      </span>
+                  {/* Network Attribution Card */}
+                  <div className="card" style={{ padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Radio size={16} style={{ color: 'var(--purple-primary)' }} />
+                      Network-Layer Attribution
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-dim)' }}>Location &amp; ASN:</span>
-                      <span>
-                        {selectedAlert.attribution?.country || 'Unknown'}, {selectedAlert.attribution?.asn || 'N/A'}
-                      </span>
-                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.82rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text-dim)' }}>Origin IP:</span>
+                        <CopyHash value={selectedAlert.attribution?.ip || 'N/A'} label="IP Address" />
+                      </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-dim)' }}>Confidence / Posterior:</span>
-                      <span className="mono">
-                        {selectedAlert.attribution?.confidence != null
-                          ? `${(selectedAlert.attribution.confidence * 100).toFixed(1)}%`
-                          : selectedAlert.attribution?.score != null
-                          ? `${(selectedAlert.attribution.score * 100).toFixed(1)}%`
-                          : '—'}
-                      </span>
-                    </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-dim)' }}>Location &amp; ASN:</span>
+                        <span>
+                          {selectedAlert.attribution?.country || 'Unknown'}, {selectedAlert.attribution?.asn || 'N/A'}
+                        </span>
+                      </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-dim)' }}>Derivation Basis:</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                        {selectedAlert.attribution?.derivation || 'TF-IDF broadcast de-biasing'}
-                      </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-dim)' }}>Confidence / Posterior:</span>
+                        <span className="mono">
+                          {selectedAlert.attribution?.confidence != null
+                            ? `${(selectedAlert.attribution.confidence * 100).toFixed(1)}%`
+                            : selectedAlert.attribution?.score != null
+                            ? `${(selectedAlert.attribution.score * 100).toFixed(1)}%`
+                            : '—'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-dim)' }}>Derivation Basis:</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                          {selectedAlert.attribution?.derivation || 'TF-IDF broadcast de-biasing'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Right Column: TreeSHAP Feature Attributions & Evidence */}
-              <div>
-                <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.75rem', color: 'var(--text-main)' }}>
-                    TreeSHAP Forensic Risk Drivers
-                  </div>
+                {/* Right Column: TreeSHAP Feature Attributions & Evidence */}
+                <div>
+                  <div className="card" style={{ marginBottom: '1rem', padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.85rem', color: 'var(--text-main)' }}>
+                      TreeSHAP Forensic Risk Drivers
+                    </div>
 
-                  {selectedAlert.reasons && selectedAlert.reasons.length > 0 ? (
-                    selectedAlert.reasons.map((r, idx) => {
-                      const hasShap = r.shap_value !== undefined && r.shap_value !== null;
-                      const shap = hasShap ? r.shap_value : null;
-                      const isPositive = shap !== null && shap >= 0;
-                      const pctWidth = shap !== null ? Math.min(100, Math.max(15, Math.abs(shap) * 60)) : 0;
+                    {selectedAlert.reasons && selectedAlert.reasons.length > 0 ? (
+                      selectedAlert.reasons.map((r, idx) => {
+                        const hasShap = r.shap_value !== undefined && r.shap_value !== null;
+                        const shap = hasShap ? r.shap_value : null;
+                        const isPositive = shap !== null && shap >= 0;
+                        const pctWidth = shap !== null ? Math.min(100, Math.max(12, Math.abs(shap) * 65)) : 0;
 
-                      return (
-                        <div key={idx} style={{ marginBottom: '0.75rem' }}>
-                          <div className="shap-bar-row">
-                            <span className="shap-label" title={r.feature}>
-                              {r.feature?.replace(/_/g, ' ')}
-                            </span>
-                            <div className="shap-bar-track">
-                              {shap !== null && (
-                                <div
-                                  className={`shap-bar-fill ${!isPositive ? 'negative' : ''}`}
-                                  style={{ width: `${pctWidth}%` }}
-                                ></div>
+                        return (
+                          <div key={idx} style={{ marginBottom: '0.85rem' }}>
+                            <div className="shap-bar-row">
+                              <span className="shap-label" title={r.feature}>
+                                {r.feature?.replace(/_/g, ' ')}
+                              </span>
+                              <div className="shap-bar-track" style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                                {shap !== null && (
+                                  <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${pctWidth}%` }}
+                                    transition={{ duration: 0.5, delay: idx * 0.05 }}
+                                    style={{
+                                      height: '100%',
+                                      backgroundColor: isPositive ? 'var(--cyan-primary)' : 'var(--crimson)',
+                                      borderRadius: '4px',
+                                      boxShadow: `0 0 6px ${isPositive ? 'var(--cyan-primary)' : 'var(--crimson)'}`,
+                                    }}
+                                  />
+                                )}
+                              </div>
+                              <span className="shap-val" style={{ fontFamily: 'monospace', fontSize: '0.75rem', minWidth: '42px', textAlign: 'right' }}>
+                                {shap !== null ? (isPositive ? `+${shap.toFixed(2)}` : shap.toFixed(2)) : '—'}
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', paddingLeft: '0.25rem', marginTop: '0.2rem' }}>
+                              {r.text}
+                              {r.percentile != null && (
+                                <>
+                                  {' '}&bull;{' '}
+                                  <span style={{ color: 'var(--amber)', fontWeight: 600 }}>
+                                    {r.percentile.toFixed(1)}% percentile
+                                  </span>
+                                </>
                               )}
                             </div>
-                            <span className="shap-val">
-                              {shap !== null ? (isPositive ? `+${shap.toFixed(2)}` : shap.toFixed(2)) : '—'}
-                            </span>
                           </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>
+                        No granular SHAP feature attributions available for this record.
+                      </div>
+                    )}
+                  </div>
 
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', paddingLeft: '0.25rem' }}>
-                            {r.text}
-                            {r.percentile != null && (
-                              <>
-                                {' '}&bull;{' '}
-                                <span style={{ color: 'var(--amber)', fontWeight: 600 }}>
-                                  {r.percentile.toFixed(1)}% percentile
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>
-                      No granular SHAP feature attributions available for this record.
+                  {/* Evidence Bundle Hash */}
+                  <div className="card" style={{ padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+                      Tamper-Evident Evidence Digest
                     </div>
-                  )}
-                </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
+                      SHA-256 canonical hash of the investigative evidence bundle:
+                    </div>
 
-                {/* Evidence Bundle Hash */}
-                <div className="card" style={{ padding: '1rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
-                    Tamper-Evident Evidence Digest
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
-                    SHA-256 canonical hash of the investigative evidence bundle:
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      background: 'rgba(0, 0, 0, 0.4)',
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--cyan-primary)', wordBreak: 'break-all', flex: 1 }}>
-                      {selectedAlert.evidence?.bundle_hash || 'SHA256-DIGEST-PENDING'}
-                    </span>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleCopyHash(selectedAlert.evidence?.bundle_hash)}
-                      title="Copy SHA-256 Bundle Hash"
-                    >
-                      {copiedHash ? <Check size={14} style={{ color: 'var(--emerald)' }} /> : <Copy size={14} />}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <CopyHash
+                        value={selectedAlert.evidence?.bundle_hash || 'SHA256-DIGEST-PENDING'}
+                        label="Bundle Hash"
+                        truncate={false}
+                        className="w-full justify-between"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

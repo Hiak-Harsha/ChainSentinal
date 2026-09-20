@@ -30,6 +30,7 @@ dependencies = [
     "maxminddb>=2.6.0",
     "defusedxml>=0.7.1",
     "ijson>=3.3.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

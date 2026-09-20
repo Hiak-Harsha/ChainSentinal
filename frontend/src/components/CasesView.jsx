@@ -1,27 +1,26 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   FileText,
-  ShieldAlert,
-  Copy,
-  Check,
   Download,
   Printer,
   PlusCircle,
-  ExternalLink,
-  Clock,
   CheckCircle2,
+  Lock,
+  FolderOpen,
 } from 'lucide-react';
 import { api } from '../api';
+import { CopyHash, StatusBadge, useToast } from './shared';
 
 export default function CasesView({ prefilledTarget = '' }) {
   const [cases, setCases] = useState([]);
   const [selectedCase, setSelectedCase] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // New investigation input
   const [newTarget, setNewTarget] = useState(prefilledTarget || '');
   const [investigating, setInvestigating] = useState(false);
+  const toast = useToast();
 
   const loadCases = async () => {
     setLoading(true);
@@ -45,6 +44,7 @@ export default function CasesView({ prefilledTarget = '' }) {
   const handleLaunchInvestigate = async () => {
     if (!newTarget) return;
     setInvestigating(true);
+    toast?.showToast(`Initiating autonomous dossier compilation for ${newTarget.slice(0, 10)}...`, 'info');
     try {
       const newCase = await api.investigate({
         target: newTarget.trim(),
@@ -53,18 +53,12 @@ export default function CasesView({ prefilledTarget = '' }) {
       });
       setSelectedCase(newCase);
       await loadCases();
+      toast?.showToast(`Investigation dossier ${newCase.case_id || ''} sealed and archived`, 'success');
     } catch (err) {
-      alert(`Autonomous investigation failed: ${err.message}`);
+      toast?.showToast(`Investigation failed: ${err.message}`, 'error');
     } finally {
       setInvestigating(false);
     }
-  };
-
-  const handleCopyHash = (hash) => {
-    if (!hash) return;
-    navigator.clipboard.writeText(hash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleExportJSON = (caseObj) => {
@@ -76,10 +70,11 @@ export default function CasesView({ prefilledTarget = '' }) {
     a.download = `${caseObj.case_id || 'case_file'}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    toast?.showToast(`Exported ${caseObj.case_id || 'case'}.json evidence bundle`, 'info');
   };
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Header & Launch Bar */}
       <div
         className="card"
@@ -90,6 +85,7 @@ export default function CasesView({ prefilledTarget = '' }) {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
         <div>
@@ -128,7 +124,8 @@ export default function CasesView({ prefilledTarget = '' }) {
         {/* Left: Case Directory List */}
         <div className="card" style={{ height: '700px', display: 'flex', flexDirection: 'column' }}>
           <div className="card-header">
-            <div className="card-title">
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FolderOpen size={16} style={{ color: 'var(--cyan-primary)' }} />
               Directory ({cases.length})
             </div>
           </div>
@@ -143,35 +140,35 @@ export default function CasesView({ prefilledTarget = '' }) {
                 const cData = c.case_data || c;
                 const isSelected = selectedCase?.case_id === cData.case_id;
                 return (
-                  <div
+                  <motion.div
                     key={c.case_id}
                     onClick={() => setSelectedCase(cData)}
+                    whileHover={{ scale: 1.01 }}
+                    transition={{ duration: 0.15 }}
                     style={{
                       padding: '0.85rem',
                       borderRadius: 'var(--radius-md)',
-                      background: isSelected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                      border: `1px solid ${isSelected ? 'rgba(0, 242, 254, 0.3)' : 'var(--border-subtle)'}`,
+                      background: isSelected ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                      border: `1px solid ${isSelected ? 'rgba(0, 240, 255, 0.35)' : 'var(--border-subtle)'}`,
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      boxShadow: isSelected ? '0 0 15px rgba(0, 240, 255, 0.1)' : 'none',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--cyan-primary)' : '#fff' }}>
                         {cData.case_id}
                       </span>
-                      <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>
-                        {cData.status || 'OPEN'}
-                      </span>
+                      <StatusBadge status={cData.status || 'OPEN'} size="sm" />
                     </div>
 
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.3rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {cData.title}
                     </div>
 
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                      Target: <span className="mono">{cData.target_id}</span>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      Target: <CopyHash value={cData.target_id} label="Target" truncateLength={6} />
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })
             )}
@@ -195,11 +192,14 @@ export default function CasesView({ prefilledTarget = '' }) {
               }}
             >
               <div>
-                <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '0.2rem' }}>
+                <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '0.2rem', fontWeight: 700 }}>
                   {selectedCase.title}
                 </h3>
-                <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                  Case ID: {selectedCase.case_id} &bull; Target: {selectedCase.target_id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.3rem' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Case ID:</span>
+                  <CopyHash value={selectedCase.case_id} label="Case ID" />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>&bull; Target:</span>
+                  <CopyHash value={selectedCase.target_id} label="Target ID" />
                 </div>
               </div>
 
@@ -232,39 +232,40 @@ export default function CasesView({ prefilledTarget = '' }) {
                 padding: '0.65rem 1rem',
                 background: 'rgba(0, 0, 0, 0.4)',
                 borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid rgba(0, 240, 255, 0.2)',
                 marginBottom: '1.25rem',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem' }}>
                 <CheckCircle2 size={15} style={{ color: 'var(--emerald)' }} />
-                <span style={{ color: 'var(--text-dim)' }}>SHA-256 Evidence Bundle Digest:</span>
-                <span className="mono" style={{ color: 'var(--cyan-primary)', fontSize: '0.78rem' }}>
-                  {selectedCase.bundle_hash}
-                </span>
+                <span style={{ color: 'var(--text-dim)' }}>SHA-256 Tamper-Evident Evidence Digest:</span>
               </div>
 
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleCopyHash(selectedCase.bundle_hash)}
-              >
-                {copied ? <Check size={13} style={{ color: 'var(--emerald)' }} /> : <Copy size={13} />}
-              </button>
+              <CopyHash
+                value={selectedCase.bundle_hash || 'SHA256-DIGEST-PENDING'}
+                label="Bundle Digest"
+                truncateLength={12}
+              />
             </div>
 
-            {/* Markdown Narrative Report */}
+            {/* Markdown Narrative Report with Forensic Framing */}
             <div
               style={{
                 flex: 1,
-                background: 'rgba(255, 255, 255, 0.01)',
+                background: 'rgba(255, 255, 255, 0.015)',
                 padding: '1.5rem',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-subtle)',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace',
                 lineHeight: 1.6,
-                fontSize: '0.9rem',
+                fontSize: '0.88rem',
+                position: 'relative',
               }}
             >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--cyan-primary)', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
+                <Lock size={12} />
+                CONFIDENTIAL FORENSIC DOSSIER &bull; CLASSIFIED LAW ENFORCEMENT EXHIBIT
+              </div>
               <pre
                 style={{
                   whiteSpace: 'pre-wrap',

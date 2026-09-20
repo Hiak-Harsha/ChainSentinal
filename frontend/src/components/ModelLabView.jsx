@@ -1,21 +1,20 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Cpu,
   RefreshCw,
-  Play,
-  CheckCircle2,
-  Sliders,
   BarChart3,
-  ShieldAlert,
   Flame,
   Zap,
 } from 'lucide-react';
 import { api } from '../api';
+import { AnimatedNumber, Skeleton, StatusBadge, useToast } from './shared';
 
 export default function ModelLabView({ onTriggerDetect }) {
   const [labData, setLabData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [training, setTraining] = useState(false);
+  const toast = useToast();
 
   const loadLab = async () => {
     setLoading(true);
@@ -24,6 +23,7 @@ export default function ModelLabView({ onTriggerDetect }) {
       setLabData(data);
     } catch (err) {
       console.error('Failed to load model lab diagnostics:', err);
+      toast?.showToast('Failed to load model lab diagnostics', 'error');
     } finally {
       setLoading(false);
     }
@@ -35,11 +35,13 @@ export default function ModelLabView({ onTriggerDetect }) {
 
   const handleRetrain = async () => {
     setTraining(true);
+    toast?.showToast('Retraining supervised & unsupervised models with cross-validation...', 'info');
     try {
       await api.trainModels();
       await loadLab();
+      toast?.showToast('Model training complete: weights, calibrations, and TreeSHAP updated', 'success');
     } catch (err) {
-      alert(`Retraining failed: ${err.message}`);
+      toast?.showToast(`Retraining failed: ${err.message}`, 'error');
     } finally {
       setTraining(false);
     }
@@ -50,7 +52,7 @@ export default function ModelLabView({ onTriggerDetect }) {
   const featureImportances = labData?.feature_importances ?? [];
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Action Header */}
       <div
         className="card"
@@ -61,6 +63,7 @@ export default function ModelLabView({ onTriggerDetect }) {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
         <div>
@@ -100,7 +103,13 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>Typology Accuracy</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
-            {supervisedMetrics?.accuracy !== undefined ? `${(supervisedMetrics.accuracy * 100).toFixed(1)}%` : '—'}
+            {supervisedMetrics?.accuracy !== undefined ? (
+              <AnimatedNumber value={supervisedMetrics.accuracy * 100} decimals={1} suffix="%" />
+            ) : loading ? (
+              <Skeleton width="80px" height="2rem" />
+            ) : (
+              '—'
+            )}
           </div>
           <div className="kpi-meta">
             HistGradientBoosting Multi-Class
@@ -112,7 +121,13 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>F1 Macro Score</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
-            {supervisedMetrics?.f1_macro !== undefined ? `${(supervisedMetrics.f1_macro * 100).toFixed(1)}%` : '—'}
+            {supervisedMetrics?.f1_macro !== undefined ? (
+              <AnimatedNumber value={supervisedMetrics.f1_macro * 100} decimals={1} suffix="%" />
+            ) : loading ? (
+              <Skeleton width="80px" height="2rem" />
+            ) : (
+              '—'
+            )}
           </div>
           <div className="kpi-meta">
             Balanced across T1–T9 Typologies
@@ -124,7 +139,11 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>Conformal Coverage</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--purple-primary)' }}>
-            {labData?.conformal?.coverage !== undefined ? `${(labData.conformal.coverage * 100).toFixed(1)}%` : '90.0% Target'}
+            {labData?.conformal?.coverage !== undefined ? (
+              <AnimatedNumber value={labData.conformal.coverage * 100} decimals={1} suffix="%" />
+            ) : (
+              '90.0% Target'
+            )}
           </div>
           <div className="kpi-meta">
             Inductive Split Conformal Guarantee
@@ -136,7 +155,13 @@ export default function ModelLabView({ onTriggerDetect }) {
             <span>Unseen Anomaly Catch</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--crimson)' }}>
-            {holdoutResults?.flagged_as_anomalous_ratio !== undefined ? `${(holdoutResults.flagged_as_anomalous_ratio * 100).toFixed(1)}%` : '—'}
+            {holdoutResults?.flagged_as_anomalous_ratio !== undefined ? (
+              <AnimatedNumber value={holdoutResults.flagged_as_anomalous_ratio * 100} decimals={1} suffix="%" />
+            ) : loading ? (
+              <Skeleton width="80px" height="2rem" />
+            ) : (
+              '—'
+            )}
           </div>
           <div className="kpi-meta">
             Hold-out Typology Detection Rate
@@ -158,9 +183,10 @@ export default function ModelLabView({ onTriggerDetect }) {
                 Proof of Real Machine Learning — Detecting Unseen Patterns Without Labels
               </div>
             </div>
-            <span className={`badge ${holdoutResults ? 'badge-emerald' : 'badge-amber'}`}>
-              {holdoutResults ? 'Evaluated vs Ground Truth' : 'Pending Training'}
-            </span>
+            <StatusBadge
+              status={holdoutResults ? 'RESOLVED' : 'INVESTIGATING'}
+              size="sm"
+            />
           </div>
 
           <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
@@ -179,13 +205,16 @@ export default function ModelLabView({ onTriggerDetect }) {
                   </span>
                 </div>
                 <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                  <div
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, Math.max(0, holdoutResults.legitimate_anomaly_mean * 100))}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
                     style={{
                       height: '100%',
-                      width: `${Math.min(100, Math.max(0, holdoutResults.legitimate_anomaly_mean * 100))}%`,
                       background: 'var(--emerald)',
+                      boxShadow: '0 0 8px var(--emerald)',
                     }}
-                  ></div>
+                  />
                 </div>
               </div>
 
@@ -197,13 +226,16 @@ export default function ModelLabView({ onTriggerDetect }) {
                   </span>
                 </div>
                 <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                  <div
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, Math.max(0, holdoutResults.holdout_anomaly_mean * 100))}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
                     style={{
                       height: '100%',
-                      width: `${Math.min(100, Math.max(0, holdoutResults.holdout_anomaly_mean * 100))}%`,
                       background: 'var(--crimson)',
+                      boxShadow: '0 0 8px var(--crimson)',
                     }}
-                  ></div>
+                  />
                 </div>
               </div>
 
@@ -212,8 +244,8 @@ export default function ModelLabView({ onTriggerDetect }) {
                   marginTop: '0.5rem',
                   padding: '0.85rem 1rem',
                   borderRadius: 'var(--radius-md)',
-                  background: 'rgba(0, 242, 254, 0.04)',
-                  border: '1px solid rgba(0, 242, 254, 0.2)',
+                  background: 'rgba(0, 240, 255, 0.04)',
+                  border: '1px solid rgba(0, 240, 255, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -229,7 +261,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             </div>
           ) : (
             <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)' }}>
-              No hold-out experiment metrics available. Click &quot;Retrain Intelligence Models&quot; to evaluate.
+              No hold-out experiment metrics available. Click &quot;Retrain All Models&quot; to evaluate.
             </div>
           )}
         </div>
@@ -268,13 +300,16 @@ export default function ModelLabView({ onTriggerDetect }) {
                     </div>
 
                     <div style={{ height: '7px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                      <div
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.5, delay: idx * 0.04 }}
                         style={{
                           height: '100%',
-                          width: `${pct}%`,
-                          background: 'linear-gradient(90deg, #00f2fe, #3b82f6)',
+                          background: 'linear-gradient(90deg, #00f0ff, #3b82f6)',
+                          boxShadow: '0 0 6px rgba(0, 240, 255, 0.4)',
                         }}
-                      ></div>
+                      />
                     </div>
                   </div>
                 );

@@ -252,7 +252,8 @@ class TestApiEndpoints:
     """Test FastAPI ingestion endpoints."""
 
     def test_detect_schema_endpoint(self):
-        client = TestClient(app)
+        from app.core.security import _ensure_api_key
+        client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
         with open(TEST_JSON, "rb") as f:
             res = client.post(
                 "/api/ingest/detect-schema",
@@ -265,7 +266,8 @@ class TestApiEndpoints:
         assert data["detected_mapping"].get("txid") == "txid"
 
     def test_profiles_endpoints(self):
-        client = TestClient(app)
+        from app.core.security import _ensure_api_key
+        client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
         save_res = client.post(
             "/api/ingest/save-profile",
             json={"profile_name": "api_test_prof", "mapping": {"col_a": "txid"}},
@@ -278,7 +280,8 @@ class TestApiEndpoints:
         assert any(p["profile_name"] == "api_test_prof" for p in profiles)
 
     def test_jobs_list_endpoint(self):
-        client = TestClient(app)
+        from app.core.security import _ensure_api_key
+        client = TestClient(app, headers={"X-API-Key": _ensure_api_key()})
         res = client.get("/api/ingest/jobs")
         assert res.status_code == 200
         assert isinstance(res.json(), list)

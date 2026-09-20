@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -19,7 +19,7 @@ class TraceRequest(BaseModel):
     target: str = Field(..., description="Root address, entity ID, or transaction hash")
     direction: str = Field(default="forward", description="forward, backward, or both")
     decay_model: str = Field(default="proportional", description="proportional, fifo, or poison")
-    max_hops: int = Field(default=5, ge=1, le=20, description="Max traversal depth")
+    max_hops: int = Field(default=5, ge=1, le=10, description="Max traversal depth")
     amount: int | None = Field(default=None, description="Initial taint in satoshis")
     min_ratio: float = Field(default=0.01, ge=0.0001, le=1.0, description="Pruning threshold")
     stop_at_exchange: bool = Field(default=True, description="Halt path at regulated exchanges")
@@ -42,7 +42,7 @@ class InvestigateRequest(BaseModel):
 
 
 @router.post("/run")
-def run_trace(req: TraceRequest) -> dict[str, Any]:
+def run_trace(request: Request, req: TraceRequest) -> dict[str, Any]:
     """Execute dynamic taint tracking run (Forward, Backward, or Both)."""
     db = DatabaseManager(settings.DB_PATH)
     tracker = TaintTracker(db)
@@ -82,7 +82,10 @@ def list_cases(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
 def get_case_file(case_id: str) -> dict[str, Any]:
     """Retrieve full investigative case file including evidence bundle and Cytoscape graph."""
     db = DatabaseManager(settings.DB_PATH)
-    case = db.get_investigative_case(case_id)
+    try:
+        case = db.get_investigative_case(case_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Investigative case '{case_id}' not found")
     if not case:
         raise HTTPException(status_code=404, detail=f"Investigative case '{case_id}' not found")
     return case.get("case_data", case)
@@ -92,7 +95,10 @@ def get_case_file(case_id: str) -> dict[str, Any]:
 def get_trace(trace_id: str) -> dict[str, Any]:
     """Fetch completed taint trace by trace_id."""
     db = DatabaseManager(settings.DB_PATH)
-    trace = db.get_taint_trace(trace_id)
+    try:
+        trace = db.get_taint_trace(trace_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Taint trace '{trace_id}' not found")
     if not trace:
         raise HTTPException(status_code=404, detail=f"Taint trace '{trace_id}' not found")
     return trace
@@ -117,7 +123,7 @@ def compute_path(req: PathRequest) -> dict[str, Any]:
 
 
 @router.post("/investigate")
-def run_investigation(req: InvestigateRequest) -> dict[str, Any]:
+def run_investigation(request: Request, req: InvestigateRequest) -> dict[str, Any]:
     """Launch autonomous investigation on target entity/address/txid."""
     db = DatabaseManager(settings.DB_PATH)
     agent = AutonomousInvestigator(db)
@@ -131,4 +137,3 @@ def run_investigation(req: InvestigateRequest) -> dict[str, Any]:
         return case
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Investigation failed: {str(e)}")
-

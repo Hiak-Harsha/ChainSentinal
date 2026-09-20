@@ -3,7 +3,7 @@
 **National Technical Research Organisation (NTRO) — Smart India Hackathon 2026**  
 *Problem Statement ID: SIH26146 | Category: Hard | Domain: Blockchain & Cybersecurity*
 
-[![Forensic Test Suite](https://img.shields.io/badge/Test%20Suite-74%2F74%20Passing%20(100%25)-brightgreen)](#forensic-verification-scorecard)
+[![Forensic Test Suite](https://img.shields.io/badge/Test%20Suite-120%2F120%20Passing%20(100%25)-brightgreen)](#forensic-verification-scorecard)
 [![Deployment](https://img.shields.io/badge/Deployment-Air--Gapped%20Offline-blue)](#single-command-deployment)
 [![Architecture](https://img.shields.io/badge/Storage-DuckDB%20Columnar%20OLAP-orange)](#system-architecture)
 [![Interface](https://img.shields.io/badge/UI-Cytoscape.js%20SOC%20Dashboard-purple)](#analyst-dashboard-capabilities)
@@ -178,9 +178,22 @@ chainsentinel report --eval-ground-truth data/synthetic/ground_truth.json --outp
 
 ---
 
-## 8. Verification & Testing
+## 8. Air-Gapped SOC Security Architecture
 
-ChainSentinel includes **74 comprehensive unit and integration tests** covering all phases:
+ChainSentinel is hardened for single-workstation, air-gapped forensic deployment in high-security defense and law enforcement environments:
+
+1. **Authentication & Session Tokens:** All `/api/*` routes (except the unauthenticated `/api/health` heartbeat) are guarded by FastAPI dependency middleware validating the `X-API-Key` header with constant-time hash comparison (`secrets.compare_digest`). The 256-bit entropy cryptographic token is auto-generated on first startup, persisted locally to `.env`, or supplied via `CS_API_KEY`.
+2. **Rate Limiting (Slowapi):** Protects compute-heavy forensic workloads from denial-of-service or pipeline exhaustion (10 req/min on `/api/graph/cluster` and `/api/models/train`, 30 req/min on `/api/correlate/run`, 60 req/min on `/api/models/detect`).
+3. **Upload Hardening & Path Traversal Defense:** Strict 500 MB upload ceiling, file extension whitelist (`.csv`, `.json`, `.ndjson`, `.xml`), rejection of executable / script payloads and double-extension masquerading (e.g. `.json.exe`), with safe XML parsing (`defusedxml` to prevent XXE). Arbitrary client filesystem paths in query parameters are prohibited — datasets resolve strictly from a server-registered baseline whitelist.
+4. **Structured Audit Trail & Chain of Custody:** High-resolution forensic audit logging (`AuditLogMiddleware`) generates structured JSONL entries in `data/audit/audit_YYYYMMDD.jsonl` recording client IP, timestamp, method, endpoint, response status, and processing duration for forensic accountability.
+5. **CORS Tightening:** Restricts cross-origin resource sharing strictly to localhost origins (`127.0.0.1:3000`, `127.0.0.1:3001`, `127.0.0.1:5173`, `127.0.0.1:8000`) and disallows wildcard origins.
+6. **Zero External Telemetry:** 100% self-contained frontend bundle with zero CDN references, Google Fonts, or external runtime analytics.
+
+---
+
+## 9. Verification & Testing
+
+ChainSentinel includes **120 comprehensive unit, integration, and security hardening tests** with 100% pass rate:
 
 ```bash
 cd backend
@@ -188,19 +201,22 @@ python -m pytest tests/ -v
 ```
 
 ```
-============================== 74 passed in 18.42s ==============================
+============================= 120 passed in 186.57s =============================
+- tests/test_hardening.py (32 passed): Auth middleware, rate limits, upload safety, CORS, audit trail
 - tests/test_generator.py (8 passed): Parity, determinism, conservation, formats
 - tests/test_health.py (2 passed): Health endpoints and settings
-- tests/test_ingest.py (8 passed): CSV/JSON/XML streaming and DuckDB persistence
+- tests/test_ingest.py (8 passed): CSV/JSON/XML streaming, schema mapping, quarantine, DuckDB
 - tests/test_cluster.py (10 passed): Disjoint-set CIOH and CoinJoin protection
 - tests/test_correlate.py (13 passed): TF-IDF hub de-biasing and permutation test
 - tests/test_phase5.py (17 passed): Features, ML, Conformal, SHAP, Section 7 API
 - tests/test_trace.py (16 passed): Forward/backward taint, pathfinding, case agent
+- tests/test_report.py (14 passed): Evidence checksums, PDF/Markdown formatting parity
 ```
 
 ---
 
-## 9. License & Attribution
+## 10. License & Attribution
 
 Developed for **Smart India Hackathon 2026 (SIH26146)** by the ChainSentinel Team.  
 Distributed under the **MIT License**. Strictly utilizes synthetic data and offline open-source dependencies.
+

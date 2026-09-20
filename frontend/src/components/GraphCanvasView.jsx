@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   ZoomIn,
   ZoomOut,
@@ -11,10 +12,10 @@ import {
   X,
   GitBranch,
   FileCheck,
-  ExternalLink,
   ShieldAlert,
 } from 'lucide-react';
 import { api } from '../api';
+import { CopyHash, RiskGauge, StatusBadge } from './shared';
 
 export default function GraphCanvasView({
   initialCenterId = null,
@@ -30,7 +31,6 @@ export default function GraphCanvasView({
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [entitiesList, setEntitiesList] = useState([]);
-  const [minRisk, setMinRisk] = useState(0.0);
 
   // Load available entities for quick selection
   useEffect(() => {
@@ -57,13 +57,13 @@ export default function GraphCanvasView({
       // Add nodes
       (data.nodes || []).forEach((n) => {
         const risk = n.risk_score ?? n.risk ?? null;
-        let color = '#3b82f6'; // default blue
-        if (n.type === 'IP') color = '#8b5cf6';
+        let color = '#38bdf8'; // default cyan
+        if (n.type === 'IP') color = '#a855f7';
         else if (n.type === 'Transaction') color = '#64748b';
         else if (n.type === 'Address') color = '#0284c7';
-        else if (risk !== null && (risk >= 0.7 || ['DARKNET', 'RANSOMWARE', 'MIXER'].includes(n.entity_type))) color = '#ef4444';
-        else if (risk !== null && risk >= 0.4) color = '#f59e0b';
-        else if (n.type === 'Entity') color = '#00f2fe';
+        else if (risk !== null && (risk >= 0.7 || ['DARKNET', 'RANSOMWARE', 'MIXER'].includes(n.entity_type))) color = '#f43f5e';
+        else if (risk !== null && risk >= 0.4) color = '#fbbf24';
+        else if (n.type === 'Entity') color = '#00f0ff';
 
         elements.push({
           group: 'nodes',
@@ -126,8 +126,8 @@ export default function GraphCanvasView({
               'width': 38,
               'height': 38,
               'border-width': 3,
-              'border-color': '#00f2fe',
-              'box-shadow': '0 0 15px rgba(0, 242, 254, 0.6)',
+              'border-color': '#00f0ff',
+              'box-shadow': '0 0 15px rgba(0, 240, 255, 0.6)',
             },
           },
           {
@@ -212,7 +212,7 @@ export default function GraphCanvasView({
   };
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       {/* Control Bar */}
       <div
         className="card"
@@ -223,6 +223,7 @@ export default function GraphCanvasView({
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '320px' }}>
@@ -306,9 +307,9 @@ export default function GraphCanvasView({
       </div>
 
       {/* Viewport Canvas with Floating Overlays */}
-      <div className="graph-viewport-container">
+      <div className="graph-viewport-container" style={{ position: 'relative', height: '620px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
         {/* Viewport Action Controls */}
-        <div className="graph-controls-overlay">
+        <div className="graph-controls-overlay" style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 10, display: 'flex', gap: '6px' }}>
           <button className="btn btn-secondary btn-sm" onClick={() => handleZoom(1.25)} title="Zoom In">
             <ZoomIn size={14} />
           </button>
@@ -321,102 +322,156 @@ export default function GraphCanvasView({
         </div>
 
         {/* Legend Overlay */}
-        <div className="graph-legend-overlay">
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#00f2fe' }}></span>
+        <div
+          className="graph-legend-overlay"
+          style={{
+            position: 'absolute',
+            bottom: '12px',
+            left: '12px',
+            zIndex: 10,
+            background: 'rgba(11, 17, 32, 0.85)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            fontSize: '0.72rem',
+          }}
+        >
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00f0ff', boxShadow: '0 0 6px #00f0ff' }}></span>
             <span>Target Entity</span>
           </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#ef4444' }}></span>
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f43f5e', boxShadow: '0 0 6px #f43f5e' }}></span>
             <span>High Risk / Illicit</span>
           </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#8b5cf6' }}></span>
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#a855f7', boxShadow: '0 0 6px #a855f7' }}></span>
             <span>Broadcast IP</span>
           </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#0284c7' }}></span>
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0284c7' }}></span>
             <span>Address</span>
           </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#64748b' }}></span>
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#64748b' }}></span>
             <span>Transaction</span>
           </div>
         </div>
 
         {/* Cytoscape DOM container */}
-        <div id="cy-canvas" ref={containerRef}></div>
+        <div id="cy-canvas" ref={containerRef} style={{ width: '100%', height: '100%', backgroundColor: '#060911' }}></div>
       </div>
 
       {/* Slide-Over Inspection Drawer */}
-      {selectedNode && (
-        <div className="drawer-backdrop" onClick={() => setSelectedNode(null)}>
-          <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ShieldAlert size={18} style={{ color: selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--cyan-primary)' }} />
-                  <h3 style={{ fontSize: '1.15rem', color: '#fff' }}>
-                    Node Inspector: {selectedNode.type}
-                  </h3>
+      <AnimatePresence>
+        {selectedNode && (
+          <motion.div
+            className="drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setSelectedNode(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(6, 9, 17, 0.65)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 999,
+              display: 'flex',
+              justifyContent: 'flex-end',
+            }}
+          >
+            <motion.div
+              className="drawer-panel"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                height: '100%',
+                backgroundColor: '#0b1120',
+                borderLeft: '1px solid rgba(0, 240, 255, 0.25)',
+                boxShadow: '-10px 0 30px rgba(0, 0, 0, 0.6)',
+                padding: '1.5rem',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ShieldAlert size={18} style={{ color: selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--cyan-primary)' }} />
+                    <h3 style={{ fontSize: '1.15rem', color: '#fff', fontWeight: 700 }}>
+                      Node Inspector: {selectedNode.type}
+                    </h3>
+                  </div>
+                  <div style={{ marginTop: '0.4rem' }}>
+                    <CopyHash value={selectedNode.id} label="Node ID" truncate={false} />
+                  </div>
                 </div>
-                <div className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem', wordBreak: 'break-all' }}>
-                  {selectedNode.id}
-                </div>
-              </div>
 
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedNode(null)}>
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Telemetry Details */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginBottom: '1.5rem' }}>
-              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--text-dim)' }}>Classification:</span>
-                  <span style={{ fontWeight: 700, color: 'var(--cyan-primary)' }}>
-                    {selectedNode.entity_type}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--text-dim)' }}>Risk Score:</span>
-                  <span style={{ fontWeight: 700, color: selectedNode.risk != null ? (selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--emerald)') : 'var(--text-dim)' }}>
-                    {selectedNode.risk != null ? `${(selectedNode.risk * 100).toFixed(0)}%` : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons for Selected Node */}
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button
-                  className="btn btn-primary btn-sm"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    onLaunchTrace(selectedNode.id);
-                    setSelectedNode(null);
-                  }}
-                >
-                  <GitBranch size={14} />
-                  Trace Taint
-                </button>
                 <button
                   className="btn btn-secondary btn-sm"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    onLaunchInvestigate(selectedNode.id);
-                    setSelectedNode(null);
-                  }}
+                  onClick={() => setSelectedNode(null)}
+                  style={{ padding: '0.35rem 0.5rem' }}
                 >
-                  <FileCheck size={14} />
-                  Investigate
+                  <X size={16} />
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+
+              {/* Telemetry Details */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.82rem' }}>Classification:</span>
+                    <StatusBadge status={selectedNode.entity_type} size="sm" />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.82rem' }}>Risk Score:</span>
+                    <RiskGauge score={selectedNode.risk ?? 0} variant="bar" size="sm" />
+                  </div>
+                </div>
+
+                {/* Action Buttons for Selected Node */}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      onLaunchTrace(selectedNode.id);
+                      setSelectedNode(null);
+                    }}
+                  >
+                    <GitBranch size={14} />
+                    Trace Taint
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      onLaunchInvestigate(selectedNode.id);
+                      setSelectedNode(null);
+                    }}
+                  >
+                    <FileCheck size={14} />
+                    Investigate
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

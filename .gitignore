@@ -68,6 +68,11 @@ prompt_dump.md
 scratch/
 scratch_*
 
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
 # IDE & OS
 .vscode/
 .idea/

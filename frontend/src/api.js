@@ -5,18 +5,51 @@
 
 const API_BASE = '/api';
 
+// Read API key from Vite env (build-time injection) or fallback for dev
+const API_KEY = typeof import.meta !== 'undefined' && import.meta.env
+  ? import.meta.env.VITE_CS_API_KEY || ''
+  : '';
+
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  // Attach API key to all requests except health
+  if (API_KEY && !endpoint.startsWith('/health')) {
+    headers['X-API-Key'] = API_KEY;
+  }
+
   const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
     ...options,
+    headers,
   };
 
   try {
     const res = await fetch(url, config);
+
+    // Surface rate limiting
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('Retry-After') || '30';
+      throw new Error(`Rate limited. Retry in ${retryAfter}s`);
+    }
+
+    // Surface auth failures
+    if (res.status === 401) {
+      throw new Error('Authentication failed: invalid or missing API key');
+    }
+
+    // Surface upload rejections
+    if (res.status === 413) {
+      throw new Error('File exceeds maximum allowed upload size');
+    }
+
+    if (res.status === 415) {
+      throw new Error('Unsupported file type');
+    }
+
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(errData.detail || `HTTP Error ${res.status}`);

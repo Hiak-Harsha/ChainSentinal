@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from chainsentinel.models.pipeline import ModelPipeline
@@ -21,12 +21,14 @@ class TrainRequest(BaseModel):
 
 
 class DetectRequest(BaseModel):
-    min_risk: float = 0.35
-    limit: int = 50
+    min_risk: float = Field(0.35, ge=0.0, le=1.0, alias="min_risk_score", description="Minimum risk score threshold")
+    limit: int = Field(50, ge=1, le=500, description="Maximum alerts to generate")
+
+    model_config = {"populate_by_name": True}
 
 
 @router.post("/train")
-def train_models(payload: TrainRequest | None = None) -> dict[str, Any]:
+def train_models(request: Request, payload: TrainRequest | None = None) -> dict[str, Any]:
     """Train supervised gradient boost model, calibrate conformal bounds, and fit anomaly detector."""
     db = DatabaseManager(settings.DB_PATH)
     pipeline = ModelPipeline(db=db, model_dir=settings.MODELS_DIR)
@@ -37,7 +39,7 @@ def train_models(payload: TrainRequest | None = None) -> dict[str, Any]:
 
 
 @router.post("/detect")
-def run_detection(payload: DetectRequest | None = None) -> dict[str, Any]:
+def run_detection(request: Request, payload: DetectRequest | None = None) -> dict[str, Any]:
     """Run full detection pipeline on all entities in database and return generated alerts."""
     min_risk = payload.min_risk if payload else 0.35
     limit = payload.limit if payload else 50
