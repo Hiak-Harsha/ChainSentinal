@@ -1,0 +1,39 @@
+{
+  "seed": 42,
+  "total_tx": 1000,
+  "n_retail_users": 50,
+  "n_merchants": 5,
+  "n_exchange_hot": 2,
+  "n_exchange_cold": 1,
+  "n_payroll": 2,
+  "n_mining_pools": 1,
+  "n_gambling": 2,
+  "n_custodial": 2,
+  "n_ransomware": 4,
+  "n_darknet": 3,
+  "n_peel_chain": 6,
+  "n_coinjoin": 4,
+  "n_layering": 4,
+  "n_structuring": 4,
+  "n_extortion": 3,
+  "n_dusting": 3,
+  "n_multi_cluster": 3,
+  "n_sensors": 5,
+  "n_relay_nodes": 200,
+  "relay_mean_delay_s": 2.0,
+  "gossip_mean_delay_s": 5.0,
+  "obfuscation_weights": [
+    0.3,
+    0.3,
+    0.25,
+    0.15
+  ],
+  "start_timestamp": 1704067200,
+  "end_timestamp": 1711929600,
+  "output_dir": "data/cli_test",
+  "formats": [
+    "csv",
+    "json",
+    "xml"
+  ]
+}

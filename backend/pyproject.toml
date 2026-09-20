@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chainsentinel"
+version = "0.1.0"
+description = "AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn[standard]>=0.30.0,<1.0",
+    "pydantic>=2.9.0,<3.0",
+    "pydantic-settings>=2.5.0,<3.0",
+    "orjson>=3.10.0,<4.0",
+    "click>=8.1.0,<9.0",
+    "python-multipart>=0.0.12,<1.0",
+    "numpy>=2.0.0",
+    "networkx>=3.3,<4.0",
+    "sse-starlette>=2.1.0,<3.0",
+    "polars>=1.8.0,<2.0",
+    "duckdb>=1.1.0,<2.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.5.0,<2.0",
+    "lightgbm>=4.5.0,<5.0",
+    "shap>=0.46.0,<1.0",
+    "python-igraph>=0.11.0,<1.0",
+    "leidenalg>=0.10.0,<1.0",
+    "maxminddb>=2.6.0,<3.0",
+    "sqlmodel>=0.0.22,<1.0",
+    "torch>=2.4.0,<3.0",
+    "gensim>=4.3.0,<5.0",
+]
+pdf = [
+    "reportlab>=4.2.0,<5.0",
+]
+dev = [
+    "pytest>=8.3.0,<9.0",
+    "pytest-asyncio>=0.24.0,<1.0",
+    "hypothesis>=6.112.0,<7.0",
+    "httpx>=0.27.0,<1.0",
+    "ruff>=0.6.0,<1.0",
+]
+
+[project.scripts]
+chainsentinel = "chainsentinel.cli:cli"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

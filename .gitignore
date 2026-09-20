@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/.venv/
+.venv/
+venv/
+ENV/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Pytest / Coverage / Hypothesis
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.vite/
+frontend/.next/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# DuckDB & generated test artifacts
+*.duckdb
+*.duckdb.wal
+backend/data/*.duckdb
+backend/data/*.duckdb.wal
+backend/data/models/*.pkl
+backend/data/parquet_export/
+backend/data/test_*
+data/test_output/
+data/test_output_2/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Archives
+*.zip
+*.tar.gz
