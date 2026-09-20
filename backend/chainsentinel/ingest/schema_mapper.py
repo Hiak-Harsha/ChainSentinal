@@ -34,7 +34,7 @@ FIELD_SYNONYMS: dict[str, list[str]] = {
         "datetime", "event_time", "observed_at", "obs_time",
     ],
     "src_ip": [
-        "src_ip", "source_ip", "ip_src", "client_ip", "relay_ip", "origin_ip",
+        "src_ip", "source_ip", "ip_src", "client_ip", "relay_ip", "origin_ip", "orig_ip",
         "srcip", "sender_ip", "peer_ip", "remote_ip",
     ],
     "dst_ip": [
@@ -76,9 +76,20 @@ FIELD_SYNONYMS: dict[str, list[str]] = {
 }
 
 
+import difflib
+
+
 def _normalize_key(key: str) -> str:
     """Normalize header key by lowercasing and removing punctuation."""
     return re.sub(r"[^a-z0-9]", "", key.lower())
+
+
+@dataclass
+class ColumnMappingMatch:
+    source_column: str
+    canonical_field: str
+    confidence: float
+    match_type: str  # "exact", "synonym", "fuzzy"
 
 
 @dataclass
@@ -86,30 +97,96 @@ class SchemaMapper:
     """Infers and applies column mappings to convert arbitrary input formats to canonical schema."""
 
     mapping: dict[str, str] = field(default_factory=dict)  # source_col -> canonical_field
+    confidence: dict[str, float] = field(default_factory=dict)  # source_col -> confidence float
+    matches: list[ColumnMappingMatch] = field(default_factory=list)
 
     @classmethod
     def auto_detect(cls, headers: list[str]) -> SchemaMapper:
-        """Infer canonical field mapping from input headers."""
+        """Infer canonical field mapping from input headers with confidence scores."""
         mapping: dict[str, str] = {}
+        confidences: dict[str, float] = {}
+        matches: list[ColumnMappingMatch] = []
         assigned_canonical: set[str] = set()
+        assigned_sources: set[str] = set()
 
         norm_headers = {h: _normalize_key(h) for h in headers}
 
-        # First pass: check direct and synonyms matches
-        for canonical, syns in FIELD_SYNONYMS.items():
-            norm_syns = [_normalize_key(s) for s in syns]
-            best_match: str | None = None
-
-            for raw_h, norm_h in norm_headers.items():
-                if norm_h in norm_syns and canonical not in assigned_canonical:
-                    best_match = raw_h
+        # Pass 1: Exact matches on canonical field name
+        for raw_h, norm_h in norm_headers.items():
+            if raw_h in assigned_sources:
+                continue
+            for canonical in CANONICAL_FIELDS:
+                if canonical in assigned_canonical:
+                    continue
+                if raw_h.lower() == canonical:
+                    mapping[raw_h] = canonical
+                    confidences[raw_h] = 1.0
+                    matches.append(ColumnMappingMatch(raw_h, canonical, 1.0, "exact"))
+                    assigned_canonical.add(canonical)
+                    assigned_sources.add(raw_h)
+                    break
+                elif norm_h == _normalize_key(canonical):
+                    mapping[raw_h] = canonical
+                    confidences[raw_h] = 0.98
+                    matches.append(ColumnMappingMatch(raw_h, canonical, 0.98, "exact"))
+                    assigned_canonical.add(canonical)
+                    assigned_sources.add(raw_h)
                     break
 
-            if best_match is not None:
-                mapping[best_match] = canonical
-                assigned_canonical.add(canonical)
+        # Pass 2: Synonym dictionary matches
+        for canonical, syns in FIELD_SYNONYMS.items():
+            if canonical in assigned_canonical:
+                continue
+            norm_syns = [_normalize_key(s) for s in syns]
 
-        return cls(mapping=mapping)
+            for raw_h, norm_h in norm_headers.items():
+                if raw_h in assigned_sources:
+                    continue
+                if norm_h in norm_syns:
+                    mapping[raw_h] = canonical
+                    confidences[raw_h] = 0.95
+                    matches.append(ColumnMappingMatch(raw_h, canonical, 0.95, "synonym"))
+                    assigned_canonical.add(canonical)
+                    assigned_sources.add(raw_h)
+                    break
+
+        # Pass 3: Fuzzy string matching for remaining headers
+        unmapped_headers = [h for h in headers if h not in assigned_sources]
+        available_canonicals = [c for c in CANONICAL_FIELDS if c not in assigned_canonical]
+
+        for raw_h in unmapped_headers:
+            norm_h = norm_headers[raw_h]
+            if not norm_h:
+                continue
+
+            best_canonical: str | None = None
+            best_score: float = 0.0
+
+            for canonical in available_canonicals:
+                if canonical in assigned_canonical:
+                    continue
+                # Compare against canonical name
+                score = difflib.SequenceMatcher(None, norm_h, _normalize_key(canonical)).ratio()
+                # Compare against synonyms of this canonical
+                for syn in FIELD_SYNONYMS.get(canonical, []):
+                    s_score = difflib.SequenceMatcher(None, norm_h, _normalize_key(syn)).ratio()
+                    if s_score > score:
+                        score = s_score
+
+                if score > best_score:
+                    best_score = score
+                    best_canonical = canonical
+
+            # Threshold for fuzzy match
+            if best_canonical and best_score >= 0.70:
+                rounded_conf = round(best_score, 2)
+                mapping[raw_h] = best_canonical
+                confidences[raw_h] = rounded_conf
+                matches.append(ColumnMappingMatch(raw_h, best_canonical, rounded_conf, "fuzzy"))
+                assigned_canonical.add(best_canonical)
+                assigned_sources.add(raw_h)
+
+        return cls(mapping=mapping, confidence=confidences, matches=matches)
 
     def apply(self, record: dict[str, Any]) -> dict[str, Any]:
         """Transform raw input record into canonical field names."""
@@ -118,3 +195,7 @@ class SchemaMapper:
             canonical_field = self.mapping.get(raw_k, raw_k)
             canonical_record[canonical_field] = val
         return canonical_record
+
+    def preview(self, sample_records: list[dict[str, Any]], n: int = 5) -> list[dict[str, Any]]:
+        """Apply mapping to sample rows to generate a preview for user confirmation."""
+        return [self.apply(row) for row in sample_records[:n]]

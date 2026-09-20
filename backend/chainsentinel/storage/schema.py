@@ -69,15 +69,20 @@ CREATE TABLE IF NOT EXISTS addresses (
 );
 
 -- Quarantined invalid rows with error classification
-CREATE TABLE IF NOT EXISTS quarantined_observations (
+CREATE TABLE IF NOT EXISTS quarantine (
     obs_id VARCHAR PRIMARY KEY,
     raw_data VARCHAR,
+    quarantine_reason VARCHAR,
     reason_code VARCHAR,
     error_details VARCHAR,
     ingested_at DOUBLE
 );
 
-CREATE INDEX IF NOT EXISTS idx_quarantine_reason ON quarantined_observations (reason_code);
+CREATE INDEX IF NOT EXISTS idx_quarantine_reason ON quarantine (quarantine_reason);
+CREATE INDEX IF NOT EXISTS idx_quarantine_reason_code ON quarantine (reason_code);
+
+CREATE VIEW IF NOT EXISTS quarantined_observations AS
+    SELECT obs_id, raw_data, reason_code, error_details, ingested_at FROM quarantine;
 
 -- Ingestion job execution tracking
 CREATE TABLE IF NOT EXISTS ingest_jobs (

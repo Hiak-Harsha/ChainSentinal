@@ -16,15 +16,22 @@ BECH32_PATTERN = re.compile(r"^bc1[a-z0-9]{11,71}$")
 
 
 class QuarantineReason:
-    MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
-    INVALID_TXID = "INVALID_TXID"
-    INVALID_ADDRESS = "INVALID_ADDRESS"
-    AMOUNT_MISMATCH = "AMOUNT_MISMATCH"
-    INVALID_FEE = "INVALID_FEE"
-    NEGATIVE_OR_ZERO_AMOUNT = "NEGATIVE_OR_ZERO_AMOUNT"
-    EMPTY_INPUTS_OR_OUTPUTS = "EMPTY_INPUTS_OR_OUTPUTS"
-    TIMESTAMP_ANOMALY = "TIMESTAMP_ANOMALY"
-    INVALID_IP = "INVALID_IP"
+    # Prompt-specified canonical reason codes:
+    NEGATIVE_AMOUNT = "negative_amount"
+    TIMESTAMP_ANOMALY = "timestamp_anomaly"
+    INVALID_ADDRESS = "invalid_address"
+    INVALID_IP = "invalid_ip"
+    CHECKSUM_MISMATCH = "checksum_mismatch"
+
+    # Additional integrity reasons:
+    MISSING_REQUIRED_FIELD = "missing_required_field"
+    INVALID_TXID = "invalid_txid"
+    EMPTY_INPUTS_OR_OUTPUTS = "empty_inputs_or_outputs"
+    INVALID_FEE = "invalid_fee"
+
+    # Backward compatibility aliases:
+    NEGATIVE_OR_ZERO_AMOUNT = "negative_amount"
+    AMOUNT_MISMATCH = "checksum_mismatch"
 
 
 @dataclass
@@ -33,6 +40,10 @@ class ValidationResult:
     reason_code: str | None = None
     error_details: str | None = None
     cleaned_record: dict[str, Any] | None = None
+
+    @property
+    def quarantine_reason(self) -> str | None:
+        return self.reason_code
 
 
 def is_valid_bitcoin_address(addr: str) -> bool:

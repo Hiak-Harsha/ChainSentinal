@@ -5,7 +5,17 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-import xml.etree.ElementTree as ET
+
+try:
+    import defusedxml.ElementTree as SafeET
+    from defusedxml.common import DefusedXmlException, DTDForbidden, EntitiesForbidden
+    HAS_DEFUSEDXML = True
+except ImportError:
+    import xml.etree.ElementTree as SafeET
+    class DefusedXmlException(Exception): pass
+    class DTDForbidden(DefusedXmlException): pass
+    class EntitiesForbidden(DefusedXmlException): pass
+    HAS_DEFUSEDXML = False
 
 from chainsentinel.ingest.parsers.base import BaseStreamingParser
 
@@ -58,29 +68,35 @@ class XmlStreamingParser(BaseStreamingParser):
         if self._headers is not None:
             return self._headers
 
-        context = ET.iterparse(str(self.file_path), events=("end",))
-        for _, elem in context:
-            if elem.tag.lower() in ("observation", "record"):
-                record = _parse_xml_element(elem)
-                self._headers = list(record.keys())
-                elem.clear()
-                break
+        try:
+            context = SafeET.iterparse(str(self.file_path), events=("end",))
+            for _, elem in context:
+                if elem.tag.lower() in ("observation", "record"):
+                    record = _parse_xml_element(elem)
+                    self._headers = list(record.keys())
+                    elem.clear()
+                    break
+        except (DefusedXmlException, DTDForbidden, EntitiesForbidden) as e:
+            raise ValueError(f"Safe XML violation (XXE/DTD forbidden): {e}") from e
         return self._headers or []
 
     def iter_chunks(self) -> Generator[list[dict[str, Any]], None, None]:
-        context = ET.iterparse(str(self.file_path), events=("end",))
-        chunk: list[dict[str, Any]] = []
+        try:
+            context = SafeET.iterparse(str(self.file_path), events=("end",))
+            chunk: list[dict[str, Any]] = []
 
-        for _, elem in context:
-            tag_lower = elem.tag.lower()
-            if tag_lower in ("observation", "record"):
-                record = _parse_xml_element(elem)
-                chunk.append(record)
-                elem.clear()
+            for _, elem in context:
+                tag_lower = elem.tag.lower()
+                if tag_lower in ("observation", "record"):
+                    record = _parse_xml_element(elem)
+                    chunk.append(record)
+                    elem.clear()
 
-                if len(chunk) >= self.chunk_size:
-                    yield chunk
-                    chunk = []
+                    if len(chunk) >= self.chunk_size:
+                        yield chunk
+                        chunk = []
 
-        if chunk:
-            yield chunk
+            if chunk:
+                yield chunk
+        except (DefusedXmlException, DTDForbidden, EntitiesForbidden) as e:
+            raise ValueError(f"Safe XML violation (XXE/DTD forbidden): {e}") from e

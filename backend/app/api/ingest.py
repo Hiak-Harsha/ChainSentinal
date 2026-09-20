@@ -98,6 +98,17 @@ async def detect_schema(
             "headers": headers,
             "sample_rows": sample,
             "detected_mapping": mapper.mapping,
+            "confidence": mapper.confidence,
+            "mapping_details": [
+                {
+                    "source_column": m.source_column,
+                    "target_canonical": m.canonical_field,
+                    "confidence": m.confidence,
+                    "match_type": m.match_type,
+                }
+                for m in mapper.matches
+            ],
+            "preview_rows": mapper.preview(sample, n=5),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to inspect file schema: {str(e)}")

@@ -28,6 +28,8 @@ dependencies = [
     "scikit-learn>=1.5.0",
     "lightgbm>=4.0.0",
     "maxminddb>=2.6.0",
+    "defusedxml>=0.7.1",
+    "ijson>=3.3.0",
 ]
 
 [project.optional-dependencies]

@@ -43,6 +43,7 @@ class GeoIpEnricher:
     def __init__(self, mmdb_path: Path | None = None):
         self.db_path = mmdb_path or find_geoip_db_path()
         self._reader = maxminddb.open_database(str(self.db_path))
+        self._cache: dict[str, EnrichmentResult] = {}
 
     def close(self) -> None:
         """Close MMDB reader."""
@@ -63,6 +64,9 @@ class GeoIpEnricher:
                 is_hosting=False,
             )
 
+        if ip in self._cache:
+            return self._cache[ip]
+
         try:
             rec = self._reader.get(ip)
         except Exception:
@@ -78,7 +82,7 @@ class GeoIpEnricher:
             is_vpn = bool(traits.get("is_vpn", False))
             is_hosting = bool(traits.get("is_hosting_provider", False))
             is_anon = is_tor or is_vpn or is_hosting
-            return EnrichmentResult(
+            res = EnrichmentResult(
                 country=country,
                 asn=asn,
                 asn_org=asn_org,
@@ -87,9 +91,11 @@ class GeoIpEnricher:
                 is_vpn=is_vpn,
                 is_hosting=is_hosting,
             )
+            self._cache[ip] = res
+            return res
 
         # Missing lookup -> None (NULL), never fake "ZZ"
-        return EnrichmentResult(
+        res = EnrichmentResult(
             country=None,
             asn=None,
             asn_org=None,
@@ -98,6 +104,8 @@ class GeoIpEnricher:
             is_vpn=False,
             is_hosting=False,
         )
+        self._cache[ip] = res
+        return res
 
 
 # Global default enricher instance

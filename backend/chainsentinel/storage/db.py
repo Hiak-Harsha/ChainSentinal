@@ -54,10 +54,18 @@ class DatabaseManager:
                 self._conn.close()
                 self._conn = None
 
-    def insert_observations_batch(self, rows: list[dict[str, Any]]) -> int:
-        """Batch insert network observations with conflict ignore on obs_id."""
-        if not rows:
+    def insert_observations_batch(self, rows_or_table: list[dict[str, Any]] | pa.Table) -> int:
+        """Batch insert network observations with conflict ignore on obs_id using vectorized Arrow."""
+        if isinstance(rows_or_table, pa.Table):
+            tbl = rows_or_table
+            if tbl.num_rows == 0:
+                return 0
+            self.conn.execute("INSERT OR IGNORE INTO observations SELECT * FROM tbl")
+            return tbl.num_rows
+
+        if not rows_or_table:
             return 0
+        rows = rows_or_table
         tbl = pa.Table.from_pydict({
             "obs_id": [r["obs_id"] for r in rows],
             "ts": [float(r["ts"]) for r in rows],
@@ -72,10 +80,16 @@ class DatabaseManager:
             "is_anonymizer": [bool(r.get("is_anonymizer", False)) for r in rows],
             "sensor_id": [str(r.get("sensor_id") or "") for r in rows],
         })
-        self.conn.register("_obs_chunk", tbl)
-        self.conn.execute("INSERT OR IGNORE INTO observations SELECT * FROM _obs_chunk")
-        self.conn.unregister("_obs_chunk")
+        self.conn.execute("INSERT OR IGNORE INTO observations SELECT * FROM tbl")
         return len(rows)
+
+    def insert_observations_arrow(self, table: pa.Table) -> int:
+        """Direct zero-copy Arrow streaming insertion for high-throughput batching."""
+        tbl = table
+        if tbl.num_rows == 0:
+            return 0
+        self.conn.execute("INSERT OR IGNORE INTO observations SELECT * FROM tbl")
+        return tbl.num_rows
 
     def insert_transactions_batch(self, rows: list[dict[str, Any]]) -> int:
         """Batch insert transactions with conflict ignore on txid."""
@@ -93,9 +107,7 @@ class DatabaseManager:
             "total_out": [int(r["total_out"]) for r in rows],
             "script_types": [r.get("script_types", ["p2wpkh"]) for r in rows],
         })
-        self.conn.register("_tx_chunk", tbl)
-        self.conn.execute("INSERT OR IGNORE INTO transactions SELECT * FROM _tx_chunk")
-        self.conn.unregister("_tx_chunk")
+        self.conn.execute("INSERT OR IGNORE INTO transactions SELECT * FROM tbl")
         return len(rows)
 
     def insert_inputs_batch(self, rows: list[dict[str, Any]]) -> int:
@@ -108,9 +120,7 @@ class DatabaseManager:
             "address": [str(r["address"]) for r in rows],
             "amount": [int(r["amount"]) for r in rows],
         })
-        self.conn.register("_in_chunk", tbl)
-        self.conn.execute("INSERT OR IGNORE INTO tx_inputs SELECT * FROM _in_chunk")
-        self.conn.unregister("_in_chunk")
+        self.conn.execute("INSERT OR IGNORE INTO tx_inputs SELECT * FROM tbl")
         return len(rows)
 
     def insert_outputs_batch(self, rows: list[dict[str, Any]]) -> int:
@@ -124,9 +134,7 @@ class DatabaseManager:
             "amount": [int(r["amount"]) for r in rows],
             "script_type": [str(r.get("script_type", "p2wpkh")) for r in rows],
         })
-        self.conn.register("_out_chunk", tbl)
-        self.conn.execute("INSERT OR IGNORE INTO tx_outputs SELECT * FROM _out_chunk")
-        self.conn.unregister("_out_chunk")
+        self.conn.execute("INSERT OR IGNORE INTO tx_outputs SELECT * FROM tbl")
         return len(rows)
 
     def upsert_addresses_batch(self, rows: list[dict[str, Any]]) -> int:
@@ -139,30 +147,28 @@ class DatabaseManager:
             "last_seen": [float(r["last_seen"]) for r in rows],
             "script_type": [str(r.get("script_type", "p2wpkh")) for r in rows],
         })
-        self.conn.register("_addr_chunk", tbl)
         self.conn.execute("""
-            INSERT INTO addresses SELECT * FROM _addr_chunk
+            INSERT INTO addresses SELECT * FROM tbl
             ON CONFLICT (address) DO UPDATE SET
                 first_seen = LEAST(addresses.first_seen, excluded.first_seen),
                 last_seen = GREATEST(addresses.last_seen, excluded.last_seen)
         """)
-        self.conn.unregister("_addr_chunk")
         return len(rows)
 
     def insert_quarantined_batch(self, rows: list[dict[str, Any]]) -> int:
-        """Batch insert quarantined invalid records."""
+        """Batch insert quarantined invalid records into quarantine table."""
         if not rows:
             return 0
+        reasons = [str(r.get("quarantine_reason") or r.get("reason_code") or "unknown") for r in rows]
         tbl = pa.Table.from_pydict({
             "obs_id": [r["obs_id"] for r in rows],
-            "raw_data": [json.dumps(r.get("raw_data", {})) if isinstance(r.get("raw_data"), dict) else str(r.get("raw_data", "")) for r in rows],
-            "reason_code": [str(r["reason_code"]) for r in rows],
+            "raw_data": [json.dumps(r.get("raw_data", {}), default=str) if isinstance(r.get("raw_data"), dict) else str(r.get("raw_data", "")) for r in rows],
+            "quarantine_reason": reasons,
+            "reason_code": reasons,
             "error_details": [str(r.get("error_details") or "") for r in rows],
             "ingested_at": [float(r["ingested_at"]) for r in rows],
         })
-        self.conn.register("_q_chunk", tbl)
-        self.conn.execute("INSERT OR IGNORE INTO quarantined_observations SELECT * FROM _q_chunk")
-        self.conn.unregister("_q_chunk")
+        self.conn.execute("INSERT OR IGNORE INTO quarantine SELECT * FROM tbl")
         return len(rows)
 
     def create_ingest_job(
@@ -882,7 +888,7 @@ class DatabaseManager:
             "tx_inputs",
             "tx_outputs",
             "addresses",
-            "quarantined_observations",
+            "quarantine",
             "entities",
             "address_entity_map",
             "graph_edges",
@@ -911,6 +917,7 @@ class DatabaseManager:
             "tx_inputs",
             "tx_outputs",
             "addresses",
+            "quarantine",
             "quarantined_observations",
             "entities",
             "address_entity_map",
