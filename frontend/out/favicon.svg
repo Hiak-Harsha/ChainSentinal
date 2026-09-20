@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="shield-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="core-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f7931a" />
+      <stop offset="100%" stop-color="#e28014" />
+    </linearGradient>
+  </defs>
+  <!-- Background Disc for Browser Tab Contrast -->
+  <rect width="32" height="32" rx="7" fill="#060911" />
+  <!-- Outer Interlocking Shield Perimeter -->
+  <path
+    d="M16 4.5L25 8V14.5C25 20.5 21 25.5 16 27.5C11 25.5 7 20.5 7 14.5V8L16 4.5Z"
+    stroke="url(#shield-grad)"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Internal Chain Link Hexagon -->
+  <path
+    d="M16 8.5L21 11.5V17L16 20L11 17V11.5L16 8.5Z"
+    stroke="#00f2fe"
+    stroke-width="1.2"
+    stroke-opacity="0.75"
+    fill="rgba(0, 242, 254, 0.1)"
+  />
+  <!-- Central Forensic Target & Satoshi Node -->
+  <circle cx="16" cy="14.2" r="3" stroke="url(#core-grad)" stroke-width="1.5" fill="rgba(247, 147, 26, 0.2)" />
+  <circle cx="16" cy="14.2" r="1.1" fill="#f7931a" />
+  <line x1="16" y1="9.5" x2="16" y2="11.2" stroke="#00f2fe" stroke-width="1" stroke-linecap="round" />
+  <line x1="16" y1="17.2" x2="16" y2="18.9" stroke="#00f2fe" stroke-width="1" stroke-linecap="round" />
+  <line x1="11.5" y1="14.2" x2="13.2" y2="14.2" stroke="#00f2fe" stroke-width="1" stroke-linecap="round" />
+  <line x1="18.8" y1="14.2" x2="20.5" y2="14.2" stroke="#00f2fe" stroke-width="1" stroke-linecap="round" />
+</svg>

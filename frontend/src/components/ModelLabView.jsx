@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { AnimatedNumber, Skeleton, StatusBadge, useToast } from './shared';
+import { ChainSentinelLogo, BTCCoinIcon, BlockLedgerIcon, getTypologyIcon } from './visuals/icons';
 
 export default function ModelLabView({ onTriggerDetect }) {
   const [labData, setLabData] = useState(null);
@@ -145,8 +146,9 @@ export default function ModelLabView({ onTriggerDetect }) {
               '90.0% Target'
             )}
           </div>
-          <div className="kpi-meta">
-            Inductive Split Conformal Guarantee
+          <div className="kpi-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Inductive Split Conformal</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--purple-primary)', fontWeight: 700 }}>1 - &alpha; = 0.90</span>
           </div>
         </div>
 
@@ -189,9 +191,21 @@ export default function ModelLabView({ onTriggerDetect }) {
             />
           </div>
 
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '0.75rem' }}>
             The NTRO problem statement explicitly demands <em>"real AI/ML, not just hardcoded rules"</em>.
-            To prove inductive generalization, our unsupervised Isolation Forest model is evaluated strictly <strong>without</strong> hold-out typologies <code>T8 (Dusting Attack)</code> and <code>T9 (Multi-Cluster Operator)</code>.
+            To prove inductive generalization, our unsupervised Isolation Forest model is evaluated strictly <strong>without</strong> hold-out typologies:
+          </div>
+
+          {/* Holdout Typology Chips */}
+          <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(6, 182, 212, 0.12)', border: '1px solid rgba(6, 182, 212, 0.3)', fontSize: '0.74rem' }}>
+              {getTypologyIcon('T_dusting', { size: 15 })}
+              <span style={{ color: '#06b6d4', fontWeight: 600 }}>T8: Dusting Attack</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.74rem' }}>
+              {getTypologyIcon('T_multi_cluster', { size: 15 })}
+              <span style={{ color: 'var(--emerald)', fontWeight: 600 }}>T9: Multi-Cluster Operator</span>
+            </div>
           </div>
 
           {/* Anomaly Separation Bar */}

@@ -112,49 +112,82 @@ export default function GraphCanvasView({
               'font-family': 'monospace',
               'text-valign': 'bottom',
               'text-margin-y': 4,
-              'width': 28,
-              'height': 28,
+              'width': 26,
+              'height': 26,
               'border-width': 2,
               'border-color': 'rgba(255, 255, 255, 0.4)',
-              'transition-property': 'background-color, line-color, target-arrow-color',
+              'transition-property': 'background-color, line-color, target-arrow-color, width, height',
               'transition-duration': '0.2s',
             },
           },
           {
             selector: 'node[?isCenter]',
             style: {
-              'width': 38,
-              'height': 38,
+              'width': 40,
+              'height': 40,
               'border-width': 3,
-              'border-color': '#00f0ff',
-              'box-shadow': '0 0 15px rgba(0, 240, 255, 0.6)',
+              'border-color': '#00f2fe',
+              'box-shadow': '0 0 16px rgba(0, 242, 254, 0.6)',
+            },
+          },
+          {
+            selector: 'node[entity_type = "EXCHANGE"]',
+            style: {
+              'shape': 'hexagon',
+              'width': 32,
+              'height': 32,
+              'background-color': '#10b981',
+              'border-color': 'rgba(16, 185, 129, 0.6)',
+            },
+          },
+          {
+            selector: 'node[entity_type = "MIXER"], node[entity_type = "DARKNET"]',
+            style: {
+              'shape': 'diamond',
+              'width': 30,
+              'height': 30,
+              'background-color': '#ef4444',
+              'border-color': 'rgba(239, 68, 68, 0.6)',
             },
           },
           {
             selector: 'node[type = "IP"]',
             style: {
-              'shape': 'diamond',
+              'shape': 'octagon',
               'width': 26,
               'height': 26,
+              'background-color': '#8b5cf6',
             },
           },
           {
             selector: 'node[type = "Transaction"]',
             style: {
-              'shape': 'rectangle',
-              'width': 24,
+              'shape': 'round-rectangle',
+              'width': 26,
               'height': 16,
+              'background-color': '#475569',
+              'border-color': 'rgba(255, 255, 255, 0.25)',
             },
           },
           {
             selector: 'edge',
             style: {
-              'width': 1.5,
+              'width': 1.6,
               'line-color': 'rgba(255, 255, 255, 0.18)',
-              'target-arrow-color': 'rgba(255, 255, 255, 0.3)',
+              'target-arrow-color': 'rgba(255, 255, 255, 0.35)',
               'target-arrow-shape': 'triangle',
               'curve-style': 'bezier',
-              'arrow-scale': 0.8,
+              'arrow-scale': 0.85,
+            },
+          },
+          {
+            selector: 'edge[weight > 0.4], edge[label = "taint"], edge[label = "SPEND"]',
+            style: {
+              'line-color': '#f7931a',
+              'target-arrow-color': '#f7931a',
+              'line-style': 'dashed',
+              'line-dash-pattern': [6, 3],
+              'width': 2.2,
             },
           },
           {
@@ -341,23 +374,27 @@ export default function GraphCanvasView({
           }}
         >
           <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00f0ff', boxShadow: '0 0 6px #00f0ff' }}></span>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00f2fe', boxShadow: '0 0 6px #00f2fe' }}></span>
             <span>Target Entity</span>
           </div>
           <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f43f5e', boxShadow: '0 0 6px #f43f5e' }}></span>
-            <span>High Risk / Illicit</span>
+            <span style={{ width: '8px', height: '8px', background: '#10b981', display: 'inline-block', clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></span>
+            <span>Exchange</span>
           </div>
           <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#a855f7', boxShadow: '0 0 6px #a855f7' }}></span>
+            <span style={{ width: '8px', height: '8px', background: '#ef4444', transform: 'rotate(45deg)', display: 'inline-block' }}></span>
+            <span>Mixer / Illicit</span>
+          </div>
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '14px', height: '0px', borderTop: '2px dashed #f7931a', display: 'inline-block' }}></span>
+            <span style={{ color: 'var(--btc-orange)' }}>Tainted Satoshi Flow</span>
+          </div>
+          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }}></span>
             <span>Broadcast IP</span>
           </div>
           <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0284c7' }}></span>
-            <span>Address</span>
-          </div>
-          <div className="legend-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="legend-dot" style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#64748b' }}></span>
+            <span style={{ width: '10px', height: '6px', borderRadius: '2px', background: '#475569', display: 'inline-block' }}></span>
             <span>Transaction</span>
           </div>
         </div>

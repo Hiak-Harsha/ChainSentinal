@@ -8,6 +8,7 @@ import TaintPathfinderView from './components/TaintPathfinderView';
 import CasesView from './components/CasesView';
 import ModelLabView from './components/ModelLabView';
 import IngestWizardView from './components/IngestWizardView';
+import { AnimatedLedgerBackdrop } from './components/visuals/AnimatedLedgerBackdrop';
 import { ToastProvider, useToast } from './components/shared/Toast';
 import { api } from './api';
 
@@ -90,6 +91,7 @@ function AppContent() {
 
   return (
     <div className="app-container">
+      <AnimatedLedgerBackdrop />
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}

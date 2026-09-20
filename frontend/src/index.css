@@ -32,6 +32,12 @@
   --crimson: #ef4444;
   --crimson-glow: rgba(239, 68, 68, 0.4);
 
+  /* Bitcoin Domain Accents */
+  --btc-orange: #f7931a;
+  --btc-orange-glow: rgba(247, 147, 26, 0.4);
+  --btc-orange-subtle: rgba(247, 147, 26, 0.12);
+  --btc-gold: #e28014;
+
   /* Semantic Risk Mapping */
   --risk-critical: #ef4444;
   --risk-critical-bg: rgba(239, 68, 68, 0.12);
@@ -340,6 +346,7 @@ h1, h2, h3, h4, h5, h6 {
 .kpi-card.crimson::before { background: var(--crimson); }
 .kpi-card.emerald::before { background: var(--emerald); }
 .kpi-card.purple::before { background: var(--purple-primary); }
+.kpi-card.btc::before { background: var(--btc-orange); }
 
 .kpi-top {
   display: flex;
@@ -361,6 +368,11 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: center;
   background: rgba(255, 255, 255, 0.05);
   color: var(--cyan-primary);
+}
+
+.kpi-icon-wrap.btc {
+  background: var(--btc-orange-subtle);
+  color: var(--btc-orange);
 }
 
 .kpi-value {
@@ -852,4 +864,186 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--shadow-glow-cyan);
   border-radius: var(--radius-full);
 }
+
+/* ==========================================================================
+   Bitcoin Forensic Domain Visuals & Utilities
+   ========================================================================== */
+.text-btc { color: var(--btc-orange); }
+.bg-btc-subtle { background: var(--btc-orange-subtle); }
+.border-btc { border-color: var(--btc-orange); }
+.shadow-glow-btc { box-shadow: 0 0 16px var(--btc-orange-glow); }
+
+.btc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: var(--btc-orange-subtle);
+  border: 1px solid rgba(247, 147, 26, 0.35);
+  color: var(--btc-orange);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* Ambient Ledger Backdrop Container */
+.ledger-backdrop-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.85;
+}
+
+/* Radar Sweep Idle State */
+.radar-display-box {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  background: radial-gradient(circle, rgba(0, 242, 254, 0.03) 0%, rgba(6, 9, 17, 0.8) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.radar-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(0, 242, 254, 0.15);
+}
+
+.radar-ring-1 { width: 80px; height: 80px; }
+.radar-ring-2 { width: 160px; height: 160px; }
+.radar-ring-3 { width: 240px; height: 240px; }
+
+.radar-crosshair-h {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: rgba(0, 242, 254, 0.12);
+}
+
+.radar-crosshair-v {
+  position: absolute;
+  height: 100%;
+  width: 1px;
+  background: rgba(0, 242, 254, 0.12);
+}
+
+.radar-sweep-beam {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 130px;
+  height: 130px;
+  transform-origin: 0 0;
+  background: conic-gradient(from 0deg, rgba(0, 242, 254, 0.35) 0deg, transparent 65deg);
+  border-radius: 100% 0 0 0;
+  animation: radar-sweep 4s linear infinite;
+}
+
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Satoshi Packet Travel Animation */
+@keyframes packet-pulse {
+  0% { transform: scale(0.9); opacity: 0.4; }
+  50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 6px var(--btc-orange)); }
+  100% { transform: scale(0.9); opacity: 0.4; }
+}
+
+.satoshi-packet {
+  animation: packet-pulse 2s ease-in-out infinite;
+}
+
+/* Wax Seal Stamp Animation */
+@keyframes wax-stamp-drop {
+  0% { transform: scale(2) rotate(-15deg); opacity: 0; }
+  60% { transform: scale(0.95) rotate(2deg); opacity: 1; }
+  80% { transform: scale(1.05) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.wax-seal-animate {
+  animation: wax-stamp-drop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Chain-of-Custody Dossier Stamp */
+.dossier-seal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid rgba(239, 68, 68, 0.5);
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.05) 100%);
+  color: var(--crimson);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.25), inset 0 0 8px rgba(239, 68, 68, 0.15);
+}
+
+.dossier-seal-badge.verified {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.05) 100%);
+  color: var(--emerald);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.25), inset 0 0 8px rgba(16, 185, 129, 0.15);
+}
+
+/* Pipeline Stage Stepper */
+.pipeline-flow-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.pipeline-flow-step.active {
+  border-color: var(--cyan-primary);
+  background: rgba(0, 242, 254, 0.06);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.15);
+}
+
+.pipeline-flow-step.completed {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* ==========================================================================
+   Accessibility: Reduced Motion
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .radar-sweep-beam,
+  .taint-edge-animated,
+  .satoshi-packet,
+  .wax-seal-animate,
+  .pulse-dot {
+    animation: none !important;
+  }
+  .radar-sweep-beam {
+    display: none;
+  }
+}
+
 

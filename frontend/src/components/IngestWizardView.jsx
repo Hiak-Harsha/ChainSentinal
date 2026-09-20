@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { AnimatedNumber, CopyHash, StatusBadge, useToast } from './shared';
+import { PipelineFlowDiagram } from './visuals/PipelineFlowDiagram';
 
 export default function IngestWizardView() {
   const [jobs, setJobs] = useState([]);
@@ -73,6 +74,9 @@ export default function IngestWizardView() {
           Refresh Jobs
         </button>
       </div>
+
+      {/* 4-Stage Ingestion Pipeline Flow Diagram */}
+      <PipelineFlowDiagram currentStep={jobs.length > 0 ? 4 : 2} fileCount={jobs.length} />
 
       {/* Grid: Saved Profiles + Ingestion Jobs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>

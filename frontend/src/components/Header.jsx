@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-  ShieldAlert,
   LayoutDashboard,
   AlertTriangle,
   Network,
@@ -12,6 +11,7 @@ import {
   CheckCircle2,
   Lock,
 } from 'lucide-react';
+import { ChainSentinelLogo, BTCCoinIcon } from './visuals/icons';
 
 export default function Header({ activeTab, setActiveTab, alertCount = 0, health = null }) {
   const tabs = [
@@ -32,10 +32,13 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
         <div className="brand-section">
           <motion.div
             className="brand-logo"
-            whileHover={{ scale: 1.05, rotate: 2 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            initial={{ scale: 0.8, rotate: -10, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            whileHover={{ scale: 1.08, rotate: 3 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 18 }}
+            style={{ background: 'transparent', border: 'none', boxShadow: 'none' }}
           >
-            <ShieldAlert size={22} />
+            <ChainSentinelLogo size={36} />
           </motion.div>
           <div className="brand-titles">
             <div className="brand-name">
@@ -49,6 +52,11 @@ export default function Header({ activeTab, setActiveTab, alertCount = 0, health
         </div>
 
         <div className="header-status-bar">
+          <div className="status-pill" style={{ borderColor: 'rgba(247, 147, 26, 0.3)', background: 'rgba(247, 147, 26, 0.08)' }}>
+            <BTCCoinIcon size={14} />
+            <span style={{ color: 'var(--btc-orange)', fontWeight: 700 }}>BTC MEMPOOL MONITOR</span>
+          </div>
+
           <div className="status-pill">
             <span
               className="pulse-dot"

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { CopyHash, StatusBadge, useToast } from './shared';
+import { SealedDossierIcon, BlockLedgerIcon, BTCCoinIcon } from './visuals/icons';
 
 export default function CasesView({ prefilledTarget = '' }) {
   const [cases, setCases] = useState([]);
@@ -154,11 +155,14 @@ export default function CasesView({ prefilledTarget = '' }) {
                       boxShadow: isSelected ? '0 0 15px rgba(0, 240, 255, 0.1)' : 'none',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--cyan-primary)' : '#fff' }}>
-                        {cData.case_id}
-                      </span>
-                      <StatusBadge status={cData.status || 'OPEN'} size="sm" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+                      <SealedDossierIcon size={20} verified={cData.status === 'RESOLVED' || cData.status === 'SEALED'} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+                        <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--cyan-primary)' : '#fff' }}>
+                          {cData.case_id}
+                        </span>
+                        <StatusBadge status={cData.status || 'OPEN'} size="sm" />
+                      </div>
                     </div>
 
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.3rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -233,11 +237,11 @@ export default function CasesView({ prefilledTarget = '' }) {
                 background: 'rgba(0, 0, 0, 0.4)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid rgba(0, 240, 255, 0.2)',
-                marginBottom: '1.25rem',
+                marginBottom: '0.85rem',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem' }}>
-                <CheckCircle2 size={15} style={{ color: 'var(--emerald)' }} />
+                <BlockLedgerIcon size={16} color="var(--emerald)" />
                 <span style={{ color: 'var(--text-dim)' }}>SHA-256 Tamper-Evident Evidence Digest:</span>
               </div>
 
@@ -246,6 +250,33 @@ export default function CasesView({ prefilledTarget = '' }) {
                 label="Bundle Digest"
                 truncateLength={12}
               />
+            </div>
+
+            {/* Chain-of-Custody Timeline Stages */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '0.5rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>1. UTXO Seizure</span>
+              </div>
+              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>2. CIOH Cluster</span>
+              </div>
+              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>3. TreeSHAP Driver</span>
+              </div>
+              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
+                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>4. SHA-256 Vault</span>
+              </div>
             </div>
 
             {/* Markdown Narrative Report with Forensic Framing */}
@@ -262,7 +293,26 @@ export default function CasesView({ prefilledTarget = '' }) {
                 position: 'relative',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--cyan-primary)', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
+              {/* Wax Seal Stamp */}
+              <div
+                className="dossier-seal-badge verified wax-seal-animate"
+                style={{
+                  position: 'absolute',
+                  top: '1.25rem',
+                  right: '1.5rem',
+                  zIndex: 5,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Cryptographic Chain-of-Custody Sealed"
+              >
+                <SealedDossierIcon size={22} verified={true} />
+                <span style={{ fontSize: '0.48rem', fontWeight: 800, letterSpacing: '0.05em', marginTop: '1px' }}>SEALED</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--cyan-primary)', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', paddingRight: '60px' }}>
                 <Lock size={12} />
                 CONFIDENTIAL FORENSIC DOSSIER &bull; CLASSIFIED LAW ENFORCEMENT EXHIBIT
               </div>

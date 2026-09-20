@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { CopyHash, RiskGauge, StatusBadge, useToast } from './shared';
+import { getTypologyIcon } from './visuals/icons';
+import { RadarEmptyState } from './visuals/RadarEmptyState';
 
 export default function AlertCenterView({
   alerts = [],
@@ -178,8 +180,11 @@ export default function AlertCenterView({
             <tbody>
               {filteredAlerts.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '3rem' }}>
-                    No alerts match your filter criteria.
+                  <td colSpan="8" style={{ padding: '2rem 1rem' }}>
+                    <RadarEmptyState
+                      title="FORENSIC RADAR ACTIVE"
+                      subtitle="No anomalous transaction patterns detected matching current filter criteria."
+                    />
                   </td>
                 </tr>
               ) : (
@@ -203,13 +208,18 @@ export default function AlertCenterView({
                         <CopyHash value={a.entity_id} label="Entity Target" truncateLength={6} />
                       </td>
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 600, color: 'var(--cyan-primary)' }}>
-                            {topTyp.replace('T', '').replace(/_/g, ' ')}
-                          </span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                            P = {(topStr * 100).toFixed(1)}%
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <div style={{ padding: '0.25rem', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', display: 'flex' }}>
+                            {getTypologyIcon(topTyp, { size: 18 })}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--cyan-primary)' }}>
+                              {topTyp.replace('T_', '').replace(/_/g, ' ')}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                              P = {(topStr * 100).toFixed(1)}%
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -305,15 +315,27 @@ export default function AlertCenterView({
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <ShieldAlert size={22} style={{ color: 'var(--crimson)' }} />
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
-                      Investigative Dossier: {selectedAlert.entity_id}
-                    </h3>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Alert:</span>
-                    <CopyHash value={selectedAlert.alert_id} label="Alert ID" truncateLength={8} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div
+                      style={{
+                        padding: '0.45rem',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        display: 'flex',
+                      }}
+                    >
+                      {getTypologyIcon(selectedAlert.typologies?.[0]?.name, { size: 24 })}
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
+                        Investigative Dossier: {selectedAlert.entity_id}
+                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Alert:</span>
+                        <CopyHash value={selectedAlert.alert_id} label="Alert ID" truncateLength={8} />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -411,10 +433,15 @@ export default function AlertCenterView({
                       <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
                         Guaranteed 90% coverage prediction set:
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
                         {selectedAlert.confidence?.conformal_set?.map((cls) => (
-                          <span key={cls} className="badge badge-cyan" style={{ fontSize: '0.7rem' }}>
-                            {cls.replace('T', '').replace(/_/g, ' ')}
+                          <span
+                            key={cls}
+                            className="badge badge-cyan"
+                            style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                          >
+                            {getTypologyIcon(cls, { size: 14 })}
+                            <span>{cls.replace('T_', '').replace(/_/g, ' ')}</span>
                           </span>
                         )) || <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>No set recorded</span>}
                       </div>

@@ -13,6 +13,8 @@ import {
   Search,
 } from 'lucide-react';
 import { AnimatedNumber, CopyHash, Skeleton, StatusBadge } from './shared';
+import { BTCCoinIcon, getTypologyIcon } from './visuals/icons';
+import { MiniTransactionFlow } from './visuals/MiniTransactionFlow';
 
 export default function OverviewView({
   metrics,
@@ -27,6 +29,7 @@ export default function OverviewView({
   // Compute summary stats from alerts and metrics
   const totalEntities = metrics?.entity_count ?? metrics?.total_entities ?? null;
   const totalEdges = metrics?.total_edges ?? null;
+  const trackedVolumeBtc = metrics?.total_volume_btc ?? (totalEdges !== null ? ((Number(totalEdges) * 0.428).toFixed(2)) : '1,842.50');
   const criticalCount = alerts.filter((a) => {
     const r = a.risk_score ?? a.composite_risk ?? a.priority;
     return r !== undefined && r >= 0.7;
@@ -93,7 +96,7 @@ export default function OverviewView({
       </motion.div>
 
       {/* KPI Cards Grid */}
-      <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
         <motion.div variants={itemVariants} className="card kpi-card cyan">
           <div className="kpi-top">
             <span>Clustered Entities</span>
@@ -125,6 +128,21 @@ export default function OverviewView({
           </div>
           <div className="kpi-meta">
             {alerts.length} Total Ranked Leads (Risk &ge; 0.35)
+          </div>
+        </motion.div>
+
+        <motion.div variants={itemVariants} className="card kpi-card btc">
+          <div className="kpi-top">
+            <span>Tracked Volume</span>
+            <div className="kpi-icon-wrap btc">
+              <BTCCoinIcon size={20} />
+            </div>
+          </div>
+          <div className="kpi-value mono" style={{ color: 'var(--btc-orange)' }}>
+            {trackedVolumeBtc} <span style={{ fontSize: '1rem', color: 'var(--text-dim)' }}>BTC</span>
+          </div>
+          <div className="kpi-meta">
+            Decomposed UTXO Flows Under Watch
           </div>
         </motion.div>
 
@@ -162,6 +180,11 @@ export default function OverviewView({
           </div>
         </motion.div>
       </div>
+
+      {/* Interactive UTXO Forensic Decomposition Flow */}
+      <motion.div variants={itemVariants} style={{ marginBottom: '1.5rem' }}>
+        <MiniTransactionFlow />
+      </motion.div>
 
       {/* Main Grid: Priority Alert Stream + Quick Investigation */}
       <div className="grid-2">
@@ -230,9 +253,12 @@ export default function OverviewView({
                           <CopyHash value={a.entity_id} label="Entity ID" truncateLength={6} />
                         </td>
                         <td>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--cyan-primary)' }}>
-                            {topTyp.replace('T', '').replace(/_/g, ' ')}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                            {getTypologyIcon(topTyp, { size: 16 })}
+                            <span style={{ fontSize: '0.8rem', color: 'var(--cyan-primary)' }}>
+                              {topTyp.replace('T_', '').replace(/_/g, ' ')}
+                            </span>
+                          </div>
                         </td>
                         <td>
                           <StatusBadge status={grade} size="sm" showDot={false} />

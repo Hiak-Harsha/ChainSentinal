@@ -9,8 +9,8 @@ import {
   CheckCircle2,
   Sliders,
 } from 'lucide-react';
-import { api } from '../api';
 import { AnimatedNumber, CopyHash, StatusBadge, useToast } from './shared';
+import { BTCCoinIcon, TaintFlowIcon, BlockLedgerIcon } from './visuals/icons';
 
 export default function TaintPathfinderView({ prefilledTarget = '' }) {
   const [subTab, setSubTab] = useState('taint'); // 'taint' or 'path'
@@ -199,6 +199,55 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                 </div>
               </div>
 
+              {/* Active Model Physics Callout */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.65rem 1rem',
+                  borderRadius: 'var(--radius-md)',
+                  background:
+                    decayModel === 'poison'
+                      ? 'rgba(239, 68, 68, 0.08)'
+                      : decayModel === 'fifo'
+                      ? 'rgba(245, 158, 11, 0.08)'
+                      : 'rgba(0, 242, 254, 0.08)',
+                  border: `1px solid ${
+                    decayModel === 'poison'
+                      ? 'rgba(239, 68, 68, 0.3)'
+                      : decayModel === 'fifo'
+                      ? 'rgba(245, 158, 11, 0.3)'
+                      : 'rgba(0, 242, 254, 0.3)'
+                  }`,
+                  marginBottom: '1.25rem',
+                  fontSize: '0.78rem',
+                }}
+              >
+                <TaintFlowIcon
+                  size={18}
+                  color={
+                    decayModel === 'poison'
+                      ? 'var(--crimson)'
+                      : decayModel === 'fifo'
+                      ? 'var(--amber)'
+                      : 'var(--cyan-primary)'
+                  }
+                />
+                <div>
+                  <span style={{ fontWeight: 700, textTransform: 'uppercase', color: '#fff' }}>
+                    {decayModel === 'poison' && 'Poison Law: '}
+                    {decayModel === 'fifo' && 'FIFO Chronological Law: '}
+                    {decayModel === 'proportional' && 'Proportional Haircut Law: '}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {decayModel === 'poison' && 'Contaminates 100% of all downstream outputs regardless of co-mingled clean balances.'}
+                    {decayModel === 'fifo' && 'Tracks serial output spending in strict chronological FIFO UTXO sequence.'}
+                    {decayModel === 'proportional' && 'Dilutes taint fraction across output splits based on input value ratio.'}
+                  </span>
+                </div>
+              </div>
+
               <button
                 id="btn-execute-trace"
                 className="btn btn-primary"
@@ -267,6 +316,58 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Horizontal Hop Conduit */}
+                {traceResult.hops && traceResult.hops.length > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.65rem',
+                      overflowX: 'auto',
+                      padding: '1rem',
+                      background: 'rgba(6, 9, 17, 0.7)',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(0, 242, 254, 0.2)',
+                      marginBottom: '1.5rem',
+                    }}
+                  >
+                    {traceResult.hops.map((h, i) => (
+                      <React.Fragment key={i}>
+                        <div
+                          style={{
+                            padding: '0.65rem 0.9rem',
+                            borderRadius: 'var(--radius-md)',
+                            background: 'rgba(15, 23, 42, 0.85)',
+                            border: `1px solid ${h.taint_pct > 50 ? 'rgba(239, 68, 68, 0.45)' : 'rgba(0, 242, 254, 0.35)'}`,
+                            minWidth: '170px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                            <span className="badge badge-cyan" style={{ fontSize: '0.65rem' }}>Hop {h.hop_index}</span>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: h.taint_pct > 50 ? 'var(--crimson)' : 'var(--amber)' }}>
+                              {h.taint_pct}% Taint
+                            </span>
+                          </div>
+                          <div className="mono" style={{ fontSize: '0.75rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {h.to_entity}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--btc-orange)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <BTCCoinIcon size={12} />
+                            <span>{h.transferred_sat != null ? `${(h.transferred_sat / 1e8).toFixed(4)} BTC` : '—'}</span>
+                          </div>
+                        </div>
+                        {i < traceResult.hops.length - 1 && (
+                          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, padding: '0 0.3rem' }}>
+                            <div className="satoshi-packet" style={{ color: 'var(--btc-orange)', fontSize: '0.75rem' }}>●</div>
+                            <div style={{ width: '18px', height: '2px', background: 'var(--cyan-primary)', opacity: 0.5 }} />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
 
                 {/* Step-by-Step Flow List */}
                 <div className="card">
