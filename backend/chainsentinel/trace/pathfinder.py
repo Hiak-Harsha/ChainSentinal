@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import heapq
+import logging
 import time
 from typing import Any
 
 import networkx as nx
 
 from chainsentinel.storage.db import DatabaseManager
+
+logger = logging.getLogger("chainsentinel.trace.pathfinder")
 
 
 class InvestigativePathfinder:
@@ -191,7 +194,8 @@ class InvestigativePathfinder:
                 txids,
             ).fetchall()
             return [str(r[0]) for r in rows if r[0]]
-        except Exception:
+        except Exception as err:
+            logger.warning("Failed to resolve origin IPs for txids: %s", err)
             return []
 
     def _build_path_result(
@@ -411,7 +415,8 @@ class InvestigativePathfinder:
 
         try:
             simple_paths = list(nx.all_simple_paths(g, source=src_id, target=dst_id, cutoff=cutoff))
-        except Exception:
+        except Exception as err:
+            logger.warning("Error finding simple paths between %s and %s: %s", src_id, dst_id, err)
             return []
 
         results = []

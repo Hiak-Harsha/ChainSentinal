@@ -1,8 +1,7 @@
-"""DuckDB database manager for ChainSentinel."""
-
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 import threading
 import time
@@ -13,33 +12,45 @@ import pyarrow as pa
 
 from chainsentinel.storage.schema import SCHEMA_DDL
 
+logger = logging.getLogger("chainsentinel.storage.db")
+
 
 class DatabaseManager:
     """Manages DuckDB embedded database connections and operations."""
 
     _instance: DatabaseManager | None = None
-    _lock = threading.Lock()
+    _lock = threading.RLock()
+    _thread_local = threading.local()
 
     def __init__(self, db_path: str | Path = "data/chainsentinel.duckdb"):
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if str(self.db_path) != ":memory:":
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # duckdb allows in-memory with ":memory:" or file path
         self._conn: duckdb.DuckDBPyConnection | None = None
-        self._init_lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._thread_local = threading.local()
         self.initialize()
 
     @property
     def conn(self) -> duckdb.DuckDBPyConnection:
-        """Get or initialize thread-safe DuckDB connection."""
+        """Get thread-isolated DuckDB cursor from the shared connection."""
         if self._conn is None:
-            with self._init_lock:
+            with self._lock:
                 if self._conn is None:
                     self._conn = duckdb.connect(str(self.db_path))
-        return self._conn
+        if not hasattr(self._thread_local, "cursor") or self._thread_local.cursor is None:
+            with self._lock:
+                self._thread_local.cursor = self._conn.cursor()
+        return self._thread_local.cursor
+
+    def cursor(self) -> duckdb.DuckDBPyConnection:
+        """Get a lightweight cursor for thread isolation."""
+        return self.conn
 
     def initialize(self) -> None:
         """Initialize database schema tables and indexes."""
-        with self._init_lock:
+        with self._lock:
             if self._conn is None:
                 self._conn = duckdb.connect(str(self.db_path))
             for statement in SCHEMA_DDL.strip().split(";"):
@@ -49,7 +60,9 @@ class DatabaseManager:
 
     def close(self) -> None:
         """Close connection cleanly."""
-        with self._init_lock:
+        with self._lock:
+            if hasattr(self._thread_local, "cursor"):
+                self._thread_local.cursor = None
             if self._conn is not None:
                 self._conn.close()
                 self._conn = None
@@ -226,7 +239,8 @@ class DatabaseManager:
         if d.get("qc_report_json"):
             try:
                 d["qc_report"] = json.loads(d["qc_report_json"])
-            except Exception:
+            except Exception as err:
+                logger.warning("Failed to parse qc_report_json for job %s: %s", job_id, err)
                 d["qc_report"] = None
         return d
 
@@ -242,7 +256,8 @@ class DatabaseManager:
             if d.get("qc_report_json"):
                 try:
                     d["qc_report"] = json.loads(d["qc_report_json"])
-                except Exception:
+                except Exception as err:
+                    logger.warning("Failed to parse qc_report_json in job list: %s", err)
                     d["qc_report"] = None
             jobs.append(d)
         return jobs
@@ -280,7 +295,8 @@ class DatabaseManager:
         for name, m_json, created in cursor.fetchall():
             try:
                 mapping = json.loads(m_json)
-            except Exception:
+            except Exception as err:
+                logger.warning("Failed to parse schema profile mapping for %s: %s", name, err)
                 mapping = {}
             profiles.append({"profile_name": name, "mapping": mapping, "created_at": created})
         return profiles
@@ -626,7 +642,8 @@ class DatabaseManager:
             try:
                 parsed = json.loads(data["alert_json"])
                 data["alert_data"] = parsed if isinstance(parsed, dict) else data
-            except Exception:
+            except Exception as err:
+                logger.warning("Failed to parse alert_json for %s: %s", alert_id, err)
                 data["alert_data"] = data
         else:
             data["alert_data"] = data
@@ -657,7 +674,8 @@ class DatabaseManager:
                 try:
                     parsed = json.loads(d["alert_json"])
                     d["alert_data"] = parsed if isinstance(parsed, dict) else d
-                except Exception:
+                except Exception as err:
+                    logger.warning("Failed to parse alert_json in list_alerts: %s", err)
                     d["alert_data"] = d
             else:
                 d["alert_data"] = d
@@ -702,7 +720,8 @@ class DatabaseManager:
             return None
         try:
             feats = json.loads(res[1])
-        except Exception:
+        except Exception as err:
+            logger.warning("Failed to parse entity feature vector for %s: %s", entity_id, err)
             feats = {}
         return {"entity_id": res[0], "features": feats, "updated_at": res[2]}
 
@@ -713,7 +732,8 @@ class DatabaseManager:
         for row in cursor.fetchall():
             try:
                 feats = json.loads(row[1])
-            except Exception:
+            except Exception as err:
+                logger.warning("Failed to parse entity feature vector in list_all: %s", err)
                 feats = {}
             results.append({"entity_id": row[0], "features": feats, "updated_at": row[2]})
         return results
@@ -739,7 +759,8 @@ class DatabaseManager:
             return None
         try:
             metrics = json.loads(res[1])
-        except Exception:
+        except Exception as err:
+            logger.warning("Failed to parse model metrics for %s: %s", model_name, err)
             metrics = {}
         return {"model_name": res[0], "metrics": metrics, "evaluated_at": res[2]}
 
@@ -750,7 +771,8 @@ class DatabaseManager:
         for row in cursor.fetchall():
             try:
                 m = json.loads(row[1])
-            except Exception:
+            except Exception as err:
+                logger.warning("Failed to parse model metrics in list_all: %s", err)
                 m = {}
             results.append({"model_name": row[0], "metrics": m, "evaluated_at": row[2]})
         return results
@@ -931,10 +953,86 @@ class DatabaseManager:
             "model_metrics",
             "taint_traces",
             "investigative_cases",
+            "alert_feedback",
+            "case_timeline_events",
         ]
         counts = {}
         for t in tables:
-            res = self.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()
-            counts[t] = res[0] if res else 0
+            try:
+                res = self.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()
+                counts[t] = res[0] if res else 0
+            except Exception:
+                counts[t] = 0
         return counts
+
+    def record_alert_feedback(
+        self,
+        feedback_id: str,
+        alert_id: str,
+        entity_id: str,
+        analyst_verdict: str,
+        notes: str = "",
+        timestamp: float | None = None,
+    ) -> bool:
+        """Record analyst ground-truth verdict for active learning."""
+        ts = timestamp or time.time()
+        with self._lock:
+            self.conn.execute(
+                """
+                INSERT OR REPLACE INTO alert_feedback (feedback_id, alert_id, entity_id, analyst_verdict, notes, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [feedback_id, alert_id, entity_id, analyst_verdict, notes, ts],
+            )
+        return True
+
+    def list_alert_feedback(self, limit: int = 100) -> list[dict[str, Any]]:
+        """List recorded analyst verdicts."""
+        with self._lock:
+            cursor = self.conn.execute(
+                "SELECT feedback_id, alert_id, entity_id, analyst_verdict, notes, timestamp FROM alert_feedback ORDER BY timestamp DESC LIMIT ?",
+                [limit],
+            )
+            cols = [desc[0] for desc in cursor.description]
+            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def record_case_timeline_event(
+        self,
+        event_id: str,
+        case_id: str,
+        event_type: str,
+        target_id: str,
+        details: dict[str, Any] | None = None,
+        timestamp: float | None = None,
+    ) -> bool:
+        """Record forensic pivot or investigative action in case audit timeline."""
+        ts = timestamp or time.time()
+        details_json = json.dumps(details or {})
+        with self._lock:
+            self.conn.execute(
+                """
+                INSERT INTO case_timeline_events (event_id, case_id, event_type, target_id, details_json, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [event_id, case_id, event_type, target_id, details_json, ts],
+            )
+        return True
+
+    def get_case_timeline(self, case_id: str) -> list[dict[str, Any]]:
+        """Get chronological investigation timeline for a case."""
+        with self._lock:
+            cursor = self.conn.execute(
+                "SELECT event_id, case_id, event_type, target_id, details_json, timestamp FROM case_timeline_events WHERE case_id = ? ORDER BY timestamp ASC",
+                [case_id],
+            )
+            cols = [desc[0] for desc in cursor.description]
+            events = []
+            for row in cursor.fetchall():
+                d = dict(zip(cols, row))
+                try:
+                    d["details"] = json.loads(d["details_json"])
+                except Exception:
+                    d["details"] = {}
+                events.append(d)
+            return events
 

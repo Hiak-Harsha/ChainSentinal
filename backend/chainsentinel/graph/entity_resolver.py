@@ -342,7 +342,82 @@ class EntityResolver:
         self.db.clear_graph_resolution()
         self.db.insert_entities_batch(entities_batch)
         self.db.insert_address_entity_map_batch(aem_batch)
-        self.db.insert_graph_edges_batch(graph.export_edge_records())
-
         summary.duration_seconds = time.time() - start_time
         return summary, graph
+
+    def merge_incremental(
+        self,
+        new_inputs: list[dict[str, Any]],
+        new_outputs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Incrementally merge newly ingested transaction inputs and outputs into existing clusters.
+
+        Avoids full table re-clustering by resolving only the affected addresses via Union-Find,
+        updating their cluster entity IDs in DuckDB in O(k * alpha(N)) time.
+        """
+        start_time = time.time()
+        conn = self.db.conn
+
+        # 1. Group inputs by txid
+        tx_inputs: dict[str, list[str]] = defaultdict(list)
+        for inp in new_inputs:
+            addr = inp.get("address")
+            txid = inp.get("txid")
+            if addr and txid:
+                tx_inputs[txid].append(addr)
+
+        all_affected_addrs: set[str] = set()
+        for addrs in tx_inputs.values():
+            all_affected_addrs.update(addrs)
+
+        if not all_affected_addrs:
+            return {"merged_addresses": 0, "entities_updated": 0, "duration_sec": 0.0}
+
+        # 2. Fetch current entity mappings for affected addresses
+        placeholders = ", ".join(["?"] * len(all_affected_addrs))
+        rows = conn.execute(
+            f"SELECT address, entity_id FROM address_entity_map WHERE address IN ({placeholders})",
+            list(all_affected_addrs),
+        ).fetchall()
+        existing_aem: dict[str, str] = dict(rows)
+
+        # 3. Use DisjointSet to union co-spends in new transactions
+        dsu: DisjointSet[str] = DisjointSet()
+        for txid, addrs in tx_inputs.items():
+            if len(addrs) >= 2:
+                for i in range(len(addrs) - 1):
+                    dsu.union(addrs[i], addrs[i + 1])
+
+        # 4. Map each component to existing entity ID or generate a new entity ID
+        components = dsu.components()
+        updated_aem: list[dict[str, Any]] = []
+        entities_updated = 0
+
+        for comp in components:
+            # Check if any address already has an entity ID
+            known_entity_ids = {existing_aem[addr] for addr in comp if addr in existing_aem}
+            if known_entity_ids:
+                target_entity = sorted(known_entity_ids)[0]
+            else:
+                seed = sorted(comp)[0]
+                target_entity = f"ent_{hashlib.sha256(seed.encode()).hexdigest()[:12]}"
+
+            for addr in comp:
+                updated_aem.append({
+                    "address": addr,
+                    "entity_id": target_entity,
+                    "confidence": 1.0,
+                    "method": "CIOH_INCREMENTAL",
+                })
+            entities_updated += 1
+
+        # 5. Persist batch updates
+        if updated_aem:
+            self.db.insert_address_entity_map_batch(updated_aem)
+
+        duration = time.time() - start_time
+        return {
+            "merged_addresses": len(updated_aem),
+            "entities_updated": entities_updated,
+            "duration_sec": round(duration, 4),
+        }

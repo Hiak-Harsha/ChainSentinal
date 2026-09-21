@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import ipaddress
+import logging
 from typing import Any
 
 from fastapi import APIRouter
@@ -10,6 +11,7 @@ import psutil
 
 from app.core.config import settings
 
+logger = logging.getLogger("chainsentinel.api.health")
 router = APIRouter(tags=["system"])
 
 
@@ -55,7 +57,8 @@ async def offline_check() -> OfflineCheckResponse:
     proc = psutil.Process()
     try:
         raw_conns = proc.net_connections(kind="inet") if hasattr(proc, "net_connections") else proc.connections(kind="inet")
-    except Exception:
+    except Exception as err:
+        logger.debug("Failed querying process sockets: %s", err)
         raw_conns = []
 
     non_loopback: list[SocketInfo] = []

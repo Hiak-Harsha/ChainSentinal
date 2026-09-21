@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 import json
+import logging
 from pathlib import Path
 import re
 import time
@@ -17,10 +18,12 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.core.config import settings
+from app.core.db_singleton import get_db
 from chainsentinel.ingest.pipeline import IngestPipeline, detect_parser
 from chainsentinel.ingest.schema_mapper import SchemaMapper
 from chainsentinel.storage.db import DatabaseManager
 
+logger = logging.getLogger("chainsentinel.api.ingest")
 router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 
 # Shared in-memory state for active jobs and progress channels
@@ -47,7 +50,7 @@ class IngestJobStartRequest(BaseModel):
 
 
 def _get_db() -> DatabaseManager:
-    return DatabaseManager(db_path=settings.DB_PATH)
+    return get_db()
 
 
 def _validate_filename(filename: str) -> str:

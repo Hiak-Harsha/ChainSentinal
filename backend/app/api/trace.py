@@ -5,18 +5,24 @@ from __future__ import annotations
 import csv
 import html
 import io
+import logging
 import time
 from typing import Any
+import uuid
+
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.db_singleton import get_db
+from app.core.events import ForensicEvent, event_bus
 from chainsentinel.evidence import verify_bundle_integrity
 from chainsentinel.storage.db import DatabaseManager
 from chainsentinel.trace.agent import AutonomousInvestigator
 from chainsentinel.trace.pathfinder import InvestigativePathfinder
 from chainsentinel.trace.taint_tracker import TaintTracker
 
+logger = logging.getLogger("chainsentinel.api.trace")
 router = APIRouter(prefix="/trace", tags=["trace"])
 
 
@@ -46,10 +52,16 @@ class InvestigateRequest(BaseModel):
     title: str | None = Field(default=None, description="Custom case title")
 
 
+class CaseTimelineEventRequest(BaseModel):
+    event_type: str = Field(..., description="Event classification, e.g. entity_viewed, trace_run, note_added")
+    target_id: str = Field(..., description="Target entity ID, address, or TXID")
+    details: dict[str, Any] = Field(default_factory=dict, description="Event metadata payload")
+
+
 @router.post("/run")
 def run_trace(request: Request, req: TraceRequest) -> dict[str, Any]:
     """Execute dynamic taint tracking run (Forward, Backward, or Both)."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     tracker = TaintTracker(db)
     try:
         res = tracker.trace(
@@ -66,40 +78,71 @@ def run_trace(request: Request, req: TraceRequest) -> dict[str, Any]:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error("Trace execution failed for target %s: %s", req.target, e)
         raise HTTPException(status_code=500, detail=f"Trace execution failed: {str(e)}")
 
 
 @router.get("/history")
 def list_traces(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
     """List historical taint trace runs."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     return db.list_taint_traces(limit=limit)
 
 
 @router.get("/cases")
 def list_cases(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
     """List forensic investigative case files."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     return db.list_investigative_cases(limit=limit)
 
 
 @router.get("/cases/{case_id}")
 def get_case_file(case_id: str) -> dict[str, Any]:
     """Retrieve full investigative case file including evidence bundle and Cytoscape graph."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     try:
         case = db.get_investigative_case(case_id)
-    except Exception:
+    except Exception as err:
+        logger.warning("Error fetching case %s: %s", case_id, err)
         raise HTTPException(status_code=404, detail=f"Investigative case '{case_id}' not found")
     if not case:
         raise HTTPException(status_code=404, detail=f"Investigative case '{case_id}' not found")
     return case.get("case_data", case)
 
 
+@router.get("/cases/{case_id}/timeline")
+def get_case_timeline_route(case_id: str) -> list[dict[str, Any]]:
+    """Retrieve chronological investigation events for a case."""
+    db = get_db()
+    return db.get_case_timeline(case_id)
+
+
+@router.post("/cases/{case_id}/timeline")
+def add_case_timeline_event_route(case_id: str, req: CaseTimelineEventRequest) -> dict[str, Any]:
+    """Record a user action / investigative pivot into the case timeline."""
+    db = get_db()
+    event_id = f"evt_{uuid.uuid4().hex[:12]}"
+    ts = time.time()
+    db.record_case_timeline_event(
+        event_id=event_id,
+        case_id=case_id,
+        event_type=req.event_type,
+        target_id=req.target_id,
+        details=req.details,
+        timestamp=ts,
+    )
+    return {
+        "event_id": event_id,
+        "case_id": case_id,
+        "status": "recorded",
+        "timestamp": ts,
+    }
+
+
 @router.get("/cases/{case_id}/export/html")
 def export_case_dossier_html(case_id: str) -> Response:
     """Export forensic case dossier as a self-contained, printable court-admissible HTML report."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     case_row = db.get_investigative_case(case_id)
     if not case_row:
         raise HTTPException(status_code=404, detail=f"Case file '{case_id}' not found")
@@ -118,7 +161,7 @@ def export_case_dossier_html(case_id: str) -> Response:
 @router.get("/cases/{case_id}/export/csv")
 def export_case_hops_csv(case_id: str) -> Response:
     """Export trace hops from a case dossier as structured CSV."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     case_row = db.get_investigative_case(case_id)
     if not case_row:
         raise HTTPException(status_code=404, detail=f"Case file '{case_id}' not found")
@@ -145,10 +188,11 @@ def export_case_dossier_generic(case_id: str, format: str = Query("html", patter
 @router.get("/{trace_id}")
 def get_trace(trace_id: str) -> dict[str, Any]:
     """Fetch completed taint trace by trace_id."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     try:
         trace = db.get_taint_trace(trace_id)
-    except Exception:
+    except Exception as err:
+        logger.warning("Error fetching taint trace %s: %s", trace_id, err)
         raise HTTPException(status_code=404, detail=f"Taint trace '{trace_id}' not found")
     if not trace:
         raise HTTPException(status_code=404, detail=f"Taint trace '{trace_id}' not found")
@@ -158,7 +202,7 @@ def get_trace(trace_id: str) -> dict[str, Any]:
 @router.post("/path")
 def compute_path(req: PathRequest) -> dict[str, Any]:
     """Compute forensic paths between two entities (shortest or highest-volume bottleneck)."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     pathfinder = InvestigativePathfinder(db)
 
     strat = req.strategy.lower()
@@ -176,7 +220,7 @@ def compute_path(req: PathRequest) -> dict[str, Any]:
 @router.post("/investigate")
 def run_investigation(request: Request, req: InvestigateRequest) -> dict[str, Any]:
     """Launch autonomous investigation on target entity/address/txid."""
-    db = DatabaseManager(settings.DB_PATH)
+    db = get_db()
     agent = AutonomousInvestigator(db)
     try:
         case = agent.investigate(
@@ -185,8 +229,25 @@ def run_investigation(request: Request, req: InvestigateRequest) -> dict[str, An
             decay_model=req.decay_model,
             title=req.title,
         )
+        # Log case created timeline event
+        case_id = case.get("case_id", "")
+        if case_id:
+            db.record_case_timeline_event(
+                event_id=f"evt_{uuid.uuid4().hex[:12]}",
+                case_id=case_id,
+                event_type="investigation_initiated",
+                target_id=req.target,
+                details={"max_hops": req.max_hops, "decay_model": req.decay_model},
+            )
+            event_bus.publish_sync(
+                ForensicEvent(
+                    type="case_updated",
+                    data={"case_id": case_id, "target_id": req.target, "title": case.get("title")},
+                )
+            )
         return case
     except Exception as e:
+        logger.error("Investigation failed for target %s: %s", req.target, e)
         raise HTTPException(status_code=500, detail=f"Investigation failed: {str(e)}")
 
 

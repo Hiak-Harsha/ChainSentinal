@@ -250,6 +250,31 @@ CREATE TABLE IF NOT EXISTS investigative_cases (
 
 CREATE INDEX IF NOT EXISTS idx_cases_target ON investigative_cases (target_id);
 CREATE INDEX IF NOT EXISTS idx_cases_status ON investigative_cases (status);
+
+-- Analyst feedback loop for active learning
+CREATE TABLE IF NOT EXISTS alert_feedback (
+    feedback_id VARCHAR PRIMARY KEY,
+    alert_id VARCHAR,
+    entity_id VARCHAR,
+    analyst_verdict VARCHAR,
+    notes VARCHAR,
+    timestamp DOUBLE
+);
+
+CREATE INDEX IF NOT EXISTS idx_af_alert ON alert_feedback (alert_id);
+CREATE INDEX IF NOT EXISTS idx_af_entity ON alert_feedback (entity_id);
+
+-- Case investigation timeline audit events
+CREATE TABLE IF NOT EXISTS case_timeline_events (
+    event_id VARCHAR PRIMARY KEY,
+    case_id VARCHAR,
+    event_type VARCHAR,
+    target_id VARCHAR,
+    details_json VARCHAR,
+    timestamp DOUBLE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cte_case ON case_timeline_events (case_id);
 """
 
 

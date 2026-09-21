@@ -22,8 +22,10 @@ from app.api.correlate import router as correlate_router
 from app.api.alerts import router as alerts_router
 from app.api.models import router as models_router
 from app.api.trace import router as trace_router
+from app.api.ws import router as ws_router
 from app.core.audit import AuditLogMiddleware
 from app.core.config import settings
+from app.core.logging_config import setup_logging
 from app.core.security import verify_api_key, _ensure_api_key
 
 # Rate limiter — shared across all routers
@@ -33,11 +35,14 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown."""
+    # Initialize structured logging
+    setup_logging()
     # Ensure data directories exist
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
     settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
     (settings.DATA_DIR / "audit").mkdir(parents=True, exist_ok=True)
     (settings.DATA_DIR / "uploads").mkdir(parents=True, exist_ok=True)
+    (settings.DATA_DIR / "logs").mkdir(parents=True, exist_ok=True)
     # Ensure API key is generated on first run
     _ensure_api_key()
     yield
@@ -52,6 +57,9 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
+
+# Ensure structured logging is initialized immediately
+setup_logging()
 
 # Rate limiter state
 app.state.limiter = limiter
@@ -82,6 +90,8 @@ app.include_router(correlate_router, prefix="/api", dependencies=[Depends(verify
 app.include_router(alerts_router, prefix="/api", dependencies=[Depends(verify_api_key)])
 app.include_router(models_router, prefix="/api", dependencies=[Depends(verify_api_key)])
 app.include_router(trace_router, prefix="/api", dependencies=[Depends(verify_api_key)])
+app.include_router(ws_router, prefix="/api")
+app.include_router(ws_router)
 
 # Serve static frontend if the build exists
 frontend_path = Path(settings.FRONTEND_DIR)

@@ -5,10 +5,13 @@ from __future__ import annotations
 from collections.abc import Generator
 import csv
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from chainsentinel.ingest.parsers.base import BaseStreamingParser
+
+logger = logging.getLogger("chainsentinel.ingest.csv_parser")
 
 
 def _parse_csv_array(val: Any, is_int: bool = False) -> list[Any]:
@@ -23,8 +26,8 @@ def _parse_csv_array(val: Any, is_int: bool = False) -> list[Any]:
             parsed = json.loads(s)
             if isinstance(parsed, list):
                 return [int(x) if is_int else str(x) for x in parsed]
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("Failed to JSON parse array from CSV field '%s': %s", s, err)
     # Semicolon or comma separated
     parts = [p.strip() for p in s.split(";") if p.strip()]
     if not parts and "," in s:

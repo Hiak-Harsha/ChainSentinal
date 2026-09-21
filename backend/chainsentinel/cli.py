@@ -581,6 +581,48 @@ def report(
     click.echo("  [OK] SIH26146 Forensic Benchmarks Processed.")
 
 
+@cli.command("retrain-from-feedback")
+@click.option("--db", default=None, type=click.Path(), help="DuckDB database path.")
+@click.option("--model-dir", default=None, type=click.Path(), help="Model artifacts directory.")
+@click.option("--dry-run", is_flag=True, help="Display feedback stats without retraining.")
+def retrain_from_feedback_cmd(db: str | None, model_dir: str | None, dry_run: bool) -> None:
+    """Retrain AI models incrementally using analyst feedback verdicts."""
+    target_db = resolve_db_path(db)
+    database = DatabaseManager(target_db)
+    feedback_items = database.list_alert_feedback(limit=1000)
+
+    click.echo("\n========================================================")
+    click.echo("     CHAINSENTINEL ACTIVE LEARNING: ANALYST FEEDBACK     ")
+    click.echo("========================================================")
+    click.echo(f"  Database:           {target_db}")
+    click.echo(f"  Recorded Feedback:  {len(feedback_items)} entries")
+
+    confirmed = [f for f in feedback_items if f.get("analyst_verdict") == "confirmed_malicious"]
+    false_pos = [f for f in feedback_items if f.get("analyst_verdict") == "false_positive"]
+    needs_rev = [f for f in feedback_items if f.get("analyst_verdict") == "needs_review"]
+
+    click.echo(f"  - Confirmed Malicious:  {len(confirmed)}")
+    click.echo(f"  - False Positives:      {len(false_pos)}")
+    click.echo(f"  - Under Review:         {len(needs_rev)}")
+
+    if not feedback_items:
+        click.echo("  [!] No analyst feedback recorded yet in alert_feedback.")
+        click.echo("========================================================\n")
+        return
+
+    if dry_run:
+        click.echo("  [DRY-RUN] Retraining skipped (dry-run mode).")
+        click.echo("========================================================\n")
+        return
+
+    m_dir = Path(model_dir) if model_dir else Path("data/models")
+    pipeline = ModelPipeline(db=database, model_dir=m_dir)
+    click.echo("  [*] Updating model weights with active learning supervision...")
+    report = pipeline.train(ground_truth_path=None)
+    click.echo("  [+] Model successfully retrained with human-in-the-loop signal!")
+    click.echo("========================================================\n")
+
+
 if __name__ == "__main__":
     cli()
 

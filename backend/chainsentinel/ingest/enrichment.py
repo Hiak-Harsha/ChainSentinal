@@ -7,9 +7,12 @@ Shares ONLY the .mmdb database with the generator, never a Python table.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any
 import maxminddb
+
+logger = logging.getLogger("chainsentinel.ingest.enrichment")
 
 
 def find_geoip_db_path() -> Path:
@@ -69,7 +72,8 @@ class GeoIpEnricher:
 
         try:
             rec = self._reader.get(ip)
-        except Exception:
+        except Exception as err:
+            logger.debug("GeoIP reader lookup failed for IP %s: %s", ip, err)
             rec = None
 
         if rec:

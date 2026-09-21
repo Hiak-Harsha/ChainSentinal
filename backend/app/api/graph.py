@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.db_singleton import get_db
 from chainsentinel.eval.cluster_eval import ClusterEvaluator
 from chainsentinel.graph.entity_resolver import EntityResolver
 from chainsentinel.storage.db import DatabaseManager
 
+logger = logging.getLogger("chainsentinel.api.graph")
 router = APIRouter(prefix="/graph", tags=["Graph & Entity Resolution"])
 
 
@@ -25,14 +28,10 @@ class ClusterRequest(BaseModel):
     dataset_name: str | None = None
 
 
-def _get_db() -> DatabaseManager:
-    return DatabaseManager(db_path=settings.DB_PATH)
-
-
 @router.post("/cluster")
 def trigger_clustering(request: Request, req: ClusterRequest = ClusterRequest()) -> dict[str, Any]:
     """Run entity resolution (CIOH + CoinJoin exclusion + change heuristics) and build graph."""
-    db = _get_db()
+    db = get_db()
     resolver = EntityResolver(
         db=db,
         change_threshold=req.change_threshold,
@@ -68,23 +67,36 @@ def list_entities(
     entity_type: str | None = Query(None),
 ) -> list[dict[str, Any]]:
     """List resolved entities sorted by address count and transaction volume."""
-    db = _get_db()
+    db = get_db()
     return db.list_entities(limit=limit, offset=offset, entity_type=entity_type)
 
 
 @router.get("/entities/{entity_id}")
 def get_entity_detail(entity_id: str) -> dict[str, Any]:
     """Retrieve details, metrics, and member addresses of an entity."""
-    db = _get_db()
+    db = get_db()
     try:
         ent = db.get_entity(entity_id)
-    except Exception:
+    except Exception as err:
+        logger.warning("Error fetching entity %s: %s", entity_id, err)
         raise HTTPException(status_code=404, detail=f"Entity {entity_id} not found")
     if not ent:
         raise HTTPException(status_code=404, detail=f"Entity {entity_id} not found")
     addresses = db.get_entity_addresses(entity_id, limit=100)
     ent["addresses"] = addresses
     return ent
+
+
+@router.get("/entities/{entity_id}/similar")
+def get_similar_entities(
+    entity_id: str,
+    top_k: int = Query(5, ge=1, le=20, description="Number of structurally similar entities to return"),
+) -> list[dict[str, Any]]:
+    """Find structurally similar entities based on graph motif topology and network features."""
+    from chainsentinel.graph.embeddings import EntitySimilarityEngine
+    db = get_db()
+    engine = EntitySimilarityEngine(db)
+    return engine.find_similar(entity_id=entity_id, top_k=top_k)
 
 
 @router.get("/subgraph")
@@ -94,7 +106,7 @@ def get_subgraph(
     max_edges: int = Query(150, ge=10, le=500),
 ) -> dict[str, Any]:
     """Extract an ego subgraph around center_id formatted for Cytoscape.js or D3.js."""
-    db = _get_db()
+    db = get_db()
     return db.get_ego_subgraph(center_id=center_id, hops=hops, max_edges=max_edges)
 
 
@@ -103,7 +115,7 @@ def get_evaluation_metrics(
     dataset_name: str | None = Query(None, description="Server-registered dataset name"),
 ) -> dict[str, Any]:
     """Compute clustering accuracy (ARI, NMI, Precision, Recall) against ground truth."""
-    db = _get_db()
+    db = get_db()
 
     # Resolve server-side only — no raw filesystem paths accepted
     gt_file: Path | None = None

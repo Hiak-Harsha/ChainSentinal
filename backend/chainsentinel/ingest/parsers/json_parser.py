@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,8 @@ except ImportError:
     HAS_IJSON = False
 
 from chainsentinel.ingest.parsers.base import BaseStreamingParser
+
+logger = logging.getLogger("chainsentinel.ingest.json_parser")
 
 
 class JsonStreamingParser(BaseStreamingParser):
@@ -81,7 +84,8 @@ class JsonStreamingParser(BaseStreamingParser):
                     record = json.loads(line)
                     if isinstance(record, dict):
                         chunk.append(record)
-                except Exception:
+                except Exception as err:
+                    logger.warning("Failed to parse JSON record in line-by-line fallback: %s (err: %s)", line[:80], err)
                     continue
 
                 if len(chunk) >= self.chunk_size:

@@ -2,21 +2,25 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+import logging
 from pathlib import Path
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.db_singleton import get_db
+from app.core.events import ForensicEvent, event_bus
+from chainsentinel.common.datasets import resolve_registered_ground_truth
 from chainsentinel.correlate.engine import CorrelationEngine
 from chainsentinel.eval.correlate_eval import CorrelateEvaluator
 from chainsentinel.storage.db import DatabaseManager
 
+logger = logging.getLogger("chainsentinel.api.correlate")
 router = APIRouter(prefix="/correlate", tags=["Network Correlation"])
-
-
-from chainsentinel.common.datasets import resolve_registered_ground_truth
 
 
 class CorrelateRunRequest(BaseModel):
@@ -26,14 +30,10 @@ class CorrelateRunRequest(BaseModel):
     dataset_name: str | None = None
 
 
-def _get_db() -> DatabaseManager:
-    return DatabaseManager(db_path=settings.DB_PATH)
-
-
 @router.post("/run")
 def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRunRequest()) -> dict[str, Any]:
     """Run full network-blockchain correlation engine and persist results."""
-    db = _get_db()
+    db = get_db()
     engine = CorrelationEngine(
         db=db,
         time_window_sec=req.time_window_sec,
@@ -47,11 +47,23 @@ def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRu
         "summary": summary.to_dict(),
     }
 
+    # Broadcast event to live WebSocket clients
+    event_bus.publish_sync(
+        ForensicEvent(
+            type="correlation_updated",
+            data={
+                "attributions_count": len(attributions),
+                "timestamp": time.time(),
+            },
+        )
+    )
+
     # Evaluate against ground truth if registered
     gt_file: Path | None = None
     try:
         gt_file = resolve_registered_ground_truth(req.dataset_name)
-    except Exception:
+    except Exception as err:
+        logger.debug("Failed resolving dataset ground truth %s: %s", req.dataset_name, err)
         gt_file = None
 
     if gt_file and gt_file.exists():
@@ -72,7 +84,7 @@ def get_entity_attribution(
     limit: int = Query(5, ge=1, le=20),
 ) -> list[dict[str, Any]]:
     """Retrieve top candidate origin IPs for an entity with posterior scores."""
-    db = _get_db()
+    db = get_db()
     return db.get_entity_ip_attribution(entity_id=entity_id, limit=limit)
 
 
@@ -82,17 +94,18 @@ def list_operator_links(
     max_p_value: float = Query(0.05, ge=0.0, le=1.0),
 ) -> list[dict[str, Any]]:
     """Retrieve statistically significant shares_origin multi-cluster links."""
-    db = _get_db()
+    db = get_db()
     return db.list_shares_origin_links(limit=limit, max_p_value=max_p_value)
 
 
 @router.get("/signatures/{entity_id}")
 def get_entity_signature(entity_id: str) -> dict[str, Any]:
     """Retrieve behavioral network signatures (ports, churn, circadian entropy) for an entity."""
-    db = _get_db()
+    db = get_db()
     try:
         sig = db.get_entity_network_signatures(entity_id)
-    except Exception:
+    except Exception as err:
+        logger.warning("Error fetching signature for entity %s: %s", entity_id, err)
         raise HTTPException(status_code=404, detail=f"No network signatures for entity {entity_id}")
     if not sig:
         raise HTTPException(status_code=404, detail=f"No network signatures for entity {entity_id}")
@@ -104,13 +117,14 @@ def get_correlation_metrics(
     dataset_name: str | None = Query(None, description="Server-registered dataset name"),
 ) -> dict[str, Any]:
     """Compute IP attribution accuracy benchmarks against ground truth."""
-    db = _get_db()
+    db = get_db()
 
     # Resolve server-side only — no raw filesystem paths accepted
     gt_file: Path | None = None
     try:
         gt_file = resolve_registered_ground_truth(dataset_name)
-    except Exception:
+    except Exception as err:
+        logger.debug("Failed resolving dataset ground truth %s: %s", dataset_name, err)
         gt_file = None
 
     if not gt_file:
@@ -127,7 +141,6 @@ def get_correlation_metrics(
 
     # Load attributions from DB
     links_cursor = db.conn.execute("SELECT entity_id, ip, score, posterior_prob, n_tx, first_seen_ratio FROM ip_entity_links ORDER BY posterior_prob DESC")
-    from collections import defaultdict
     attributions: dict[str, list[dict[str, Any]]] = defaultdict(list)
     cols = [desc[0] for desc in links_cursor.description]
     for row in links_cursor.fetchall():
