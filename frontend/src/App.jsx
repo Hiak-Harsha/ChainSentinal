@@ -337,10 +337,6 @@ function AppContent() {
                     selection: { type: 'alert', id: a.alert_id, data: a },
                   })
                 }
-                onCloseDetail={() => setSelection(null)}
-                onLaunchTrace={handleLaunchTrace}
-                onLaunchInvestigate={handleLaunchInvestigate}
-                onStatusUpdated={handleStatusUpdated}
               />
             </div>
           )}
@@ -362,6 +358,7 @@ function AppContent() {
             <div className="canvas-overlay">
               <CasesView
                 prefilledTarget={prefilledTarget}
+                selectedCaseId={selection?.type === 'case' ? selection.id : null}
                 onSelectCase={(c) => {
                   setActiveCase(c);
                   setSelection({ type: 'case', id: c.case_id, data: c });

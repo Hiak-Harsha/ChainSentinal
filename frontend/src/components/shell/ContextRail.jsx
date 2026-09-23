@@ -36,7 +36,7 @@ export default function ContextRail({
           </div>
           <div
             className="rail-entity-item"
-            style={{ borderLeft: '2px solid var(--btc-orange)' }}
+            style={{ borderLeft: '2px solid var(--border-focus-neutral)' }}
             onClick={() => onPivotTo({ mode: 'network', selection: { type: 'case', id: activeCase.case_id } })}
           >
             <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-main)' }}>

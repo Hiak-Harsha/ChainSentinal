@@ -131,7 +131,7 @@ export default function InspectorPanel({
                       <span className="mono" style={{ color: 'var(--text-muted)' }}>
                         {truncateId(se.entity_id)}
                       </span>
-                      <span style={{ color: 'var(--btc-orange)', fontWeight: 700 }}>
+                      <span style={{ color: 'var(--text-emphasis)', fontWeight: 700 }}>
                         {(se.similarity_score * 100).toFixed(0)}%
                       </span>
                     </div>
@@ -275,7 +275,7 @@ export default function InspectorPanel({
                       style={{
                         padding: '0.35rem 0',
                         fontSize: '0.72rem',
-                        borderLeft: '2px solid var(--btc-orange)',
+                        borderLeft: '2px solid var(--border-neutral-hover)',
                         paddingLeft: '0.6rem',
                         marginBottom: '0.3rem',
                       }}
@@ -289,7 +289,19 @@ export default function InspectorPanel({
                 </div>
               )}
 
-              <button className="btn btn-secondary btn-sm" style={{ width: '100%' }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ width: '100%' }}
+                onClick={() => {
+                  const blob = new Blob([JSON.stringify(caseDetail, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${caseDetail.case_id || 'case_file'}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
                 <ExternalLink size={13} /> Export Dossier
               </button>
             </>

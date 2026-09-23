@@ -66,7 +66,7 @@ export default function OverviewView({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <Flame size={24} style={{ color: 'var(--btc-orange)' }} />
+              <Flame size={24} style={{ color: 'var(--amber)' }} />
               Forensic Situational Threat Center
             </h2>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
@@ -100,11 +100,11 @@ export default function OverviewView({
         <motion.div variants={itemVariants} className="card kpi-card cyan">
           <div className="kpi-top">
             <span>Clustered Entities</span>
-            <div className="kpi-icon-wrap" style={{ color: 'var(--btc-orange)' }}>
+            <div className="kpi-icon-wrap" style={{ color: 'var(--text-main)' }}>
               <Users size={20} />
             </div>
           </div>
-          <div className="kpi-value mono" style={{ color: 'var(--btc-orange)' }}>
+          <div className="kpi-value mono" style={{ color: 'var(--text-emphasis)' }}>
             {totalEntities !== null ? (
               <AnimatedNumber value={totalEntities} />
             ) : (
@@ -255,7 +255,7 @@ export default function OverviewView({
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                             {getTypologyIcon(topTyp, { size: 16 })}
-                            <span style={{ fontSize: '0.8rem', color: 'var(--btc-orange)' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-emphasis)' }}>
                               {topTyp.replace('T_', '').replace(/_/g, ' ')}
                             </span>
                           </div>
@@ -290,7 +290,7 @@ export default function OverviewView({
           <div className="card-header">
             <div>
               <div className="card-title">
-                <ShieldCheck size={18} style={{ color: 'var(--btc-orange)' }} />
+                <ShieldCheck size={18} style={{ color: 'var(--emerald)' }} />
                 Forensic Operational Readiness
               </div>
               <div className="card-subtitle">

@@ -30,8 +30,8 @@ vi.mock('../api', () => ({
 // Mock framer-motion to avoid animation issues in jsdom
 vi.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <div {...props}>{children}</div>,
-    span: ({ children, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <span {...props}>{children}</span>,
+    div: ({ children, layoutId, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <div {...props}>{children}</div>,
+    span: ({ children, layoutId, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <span {...props}>{children}</span>,
   },
   AnimatePresence: ({ children }) => <>{children}</>,
   useSpring: (initial) => ({ set: vi.fn(), get: () => initial }),

@@ -1,22 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   FileText,
-  Download,
-  Printer,
   PlusCircle,
-  CheckCircle2,
-  Lock,
   FolderOpen,
+  Download,
+  Calendar,
+  Layers,
+  Search,
 } from 'lucide-react';
 import { api } from '../api';
 import { CopyHash, StatusBadge, useToast } from './shared';
-import { SealedDossierIcon, BlockLedgerIcon, BTCCoinIcon } from './visuals/icons';
+import { SealedDossierIcon } from './visuals/icons';
 
-export default function CasesView({ prefilledTarget = '' }) {
+export default function CasesView({
+  prefilledTarget = '',
+  onSelectCase,
+  selectedCaseId = null,
+}) {
   const [cases, setCases] = useState([]);
-  const [selectedCase, setSelectedCase] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // New investigation input
   const [newTarget, setNewTarget] = useState(prefilledTarget || '');
@@ -28,9 +32,6 @@ export default function CasesView({ prefilledTarget = '' }) {
     try {
       const data = await api.getCases();
       setCases(data || []);
-      if (data && data.length > 0 && !selectedCase) {
-        setSelectedCase(data[0].case_data || data[0]);
-      }
     } catch (err) {
       console.error('Failed to fetch cases:', err);
     } finally {
@@ -52,9 +53,10 @@ export default function CasesView({ prefilledTarget = '' }) {
         max_hops: 4,
         decay_model: 'proportional',
       });
-      setSelectedCase(newCase);
       await loadCases();
+      if (onSelectCase) onSelectCase(newCase);
       toast?.showToast(`Investigation dossier ${newCase.case_id || ''} sealed and archived`, 'success');
+      setNewTarget('');
     } catch (err) {
       toast?.showToast(`Investigation failed: ${err.message}`, 'error');
     } finally {
@@ -62,7 +64,8 @@ export default function CasesView({ prefilledTarget = '' }) {
     }
   };
 
-  const handleExportJSON = (caseObj) => {
+  const handleExportJSON = (e, caseObj) => {
+    e.stopPropagation();
     if (!caseObj) return;
     const blob = new Blob([JSON.stringify(caseObj, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -74,33 +77,44 @@ export default function CasesView({ prefilledTarget = '' }) {
     toast?.showToast(`Exported ${caseObj.case_id || 'case'}.json evidence bundle`, 'info');
   };
 
+  const filteredCases = cases.filter((c) => {
+    const cData = c.case_data || c;
+    const q = searchTerm.toLowerCase();
+    return (
+      !searchTerm ||
+      cData.case_id?.toLowerCase().includes(q) ||
+      cData.target_id?.toLowerCase().includes(q) ||
+      cData.title?.toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
       {/* Header & Launch Bar */}
       <div
         className="card"
         style={{
-          marginBottom: '1.5rem',
+          marginBottom: '1rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: 'var(--space-4)',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
         <div>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <FileText size={22} style={{ color: 'var(--btc-orange)' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-emphasis)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <FileText size={20} style={{ color: 'var(--text-main)' }} />
             Autonomous Forensic Case Dossiers
           </h2>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
-            Court-admissible case files generated autonomously with bidirectional taint tracking, IP attribution, and SHA-256 evidence digests.
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+            Court-admissible case files &bull; Select any case to inspect timeline &amp; chain of custody in the Inspector Panel
           </div>
         </div>
 
         {/* Launch New Case */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <input
             type="text"
             className="input mono"
@@ -120,220 +134,130 @@ export default function CasesView({ prefilledTarget = '' }) {
         </div>
       </div>
 
-      {/* Main Grid: Cases Directory + Dossier Reader */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '1.5rem' }}>
-        {/* Left: Case Directory List */}
-        <div className="card" style={{ height: '700px', display: 'flex', flexDirection: 'column' }}>
-          <div className="card-header">
-            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FolderOpen size={16} style={{ color: 'var(--btc-orange)' }} />
-              Directory ({cases.length})
-            </div>
+      {/* Case Directory (Full Width Table) */}
+      <div className="card">
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <FolderOpen size={16} style={{ color: 'var(--text-main)' }} />
+            Case Directory ({filteredCases.length})
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {cases.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>
-                No case files generated yet.
-              </div>
-            ) : (
-              cases.map((c) => {
-                const cData = c.case_data || c;
-                const isSelected = selectedCase?.case_id === cData.case_id;
-                return (
-                  <motion.div
-                    key={c.case_id}
-                    onClick={() => setSelectedCase(cData)}
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.15 }}
-                    style={{
-                      padding: '0.85rem',
-                      borderRadius: 'var(--radius-md)',
-                      background: isSelected ? 'var(--btc-orange-subtle)' : 'rgba(255, 255, 255, 0.02)',
-                      border: `1px solid ${isSelected ? 'var(--btc-orange)' : 'var(--border-subtle)'}`,
-                      cursor: 'pointer',
-                      boxShadow: isSelected ? '0 0 15px var(--btc-orange-glow)' : 'none',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
-                      <SealedDossierIcon size={20} verified={cData.status === 'RESOLVED' || cData.status === 'SEALED'} />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
-                        <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--btc-orange)' : '#fff' }}>
-                          {cData.case_id}
-                        </span>
-                        <StatusBadge status={cData.status || 'OPEN'} size="sm" />
-                      </div>
-                    </div>
-
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.3rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {cData.title}
-                    </div>
-
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      Target: <CopyHash value={cData.target_id} label="Target" truncateLength={6} />
-                    </div>
-                  </motion.div>
-                );
-              })
-            )}
+          <div style={{ position: 'relative', minWidth: '240px' }}>
+            <Search
+              size={14}
+              style={{
+                position: 'absolute',
+                left: '0.65rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-dim)',
+              }}
+            />
+            <input
+              type="text"
+              className="input"
+              style={{ width: '100%', paddingLeft: '2rem', fontSize: '0.78rem' }}
+              placeholder="Search case dossiers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </div>
 
-        {/* Right: Dossier Content Viewer */}
-        {selectedCase ? (
-          <div className="card" style={{ height: '700px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            {/* Dossier Header Bar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid var(--border-subtle)',
-                paddingBottom: '1rem',
-                marginBottom: '1.25rem',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-              }}
-            >
-              <div>
-                <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '0.2rem', fontWeight: 700 }}>
-                  {selectedCase.title}
-                </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.3rem' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Case ID:</span>
-                  <CopyHash value={selectedCase.case_id} label="Case ID" />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>&bull; Target:</span>
-                  <CopyHash value={selectedCase.target_id} label="Target ID" />
-                </div>
-              </div>
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: '50px' }}>Seal</th>
+                <th>Case ID</th>
+                <th>Target Entity</th>
+                <th>Title / Subject</th>
+                <th>Entities</th>
+                <th>Events</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCases.length === 0 ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 'var(--space-6) var(--space-4)' }}>
+                    {loading ? 'Loading case dossiers...' : 'No case files found. Enter an entity above to generate one.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredCases.map((c) => {
+                  const cData = c.case_data || c;
+                  const isSelected = selectedCaseId === cData.case_id;
+                  const isVerified = cData.status === 'RESOLVED' || cData.status === 'SEALED';
+                  const entityCount = cData.entities ? cData.entities.length : (cData.entity_count ?? 1);
+                  const eventCount = cData.timeline ? cData.timeline.length : (cData.events_count ?? 0);
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleExportJSON(selectedCase)}
-                  title="Download JSON Evidence Bundle"
-                >
-                  <Download size={14} />
-                  Export JSON
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => window.print()}
-                  title="Print Dossier"
-                >
-                  <Printer size={14} />
-                  Print
-                </button>
-              </div>
-            </div>
-
-            {/* SHA-256 Tamper-Evident Evidence Bar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.65rem 1rem',
-                background: 'rgba(0, 0, 0, 0.4)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(0, 240, 255, 0.2)',
-                marginBottom: '0.85rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem' }}>
-                <BlockLedgerIcon size={16} color="var(--emerald)" />
-                <span style={{ color: 'var(--text-dim)' }}>SHA-256 Tamper-Evident Evidence Digest:</span>
-              </div>
-
-              <CopyHash
-                value={selectedCase.bundle_hash || 'SHA256-DIGEST-PENDING'}
-                label="Bundle Digest"
-                truncateLength={12}
-              />
-            </div>
-
-            {/* Chain-of-Custody Timeline Stages */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '0.5rem',
-                marginBottom: '1.25rem',
-              }}
-            >
-              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
-                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>1. UTXO Seizure</span>
-              </div>
-              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
-                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>2. CIOH Cluster</span>
-              </div>
-              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
-                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>3. TreeSHAP Driver</span>
-              </div>
-              <div style={{ padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
-                <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>4. SHA-256 Vault</span>
-              </div>
-            </div>
-
-            {/* Markdown Narrative Report with Forensic Framing */}
-            <div
-              style={{
-                flex: 1,
-                background: 'rgba(255, 255, 255, 0.015)',
-                padding: '1.5rem',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-subtle)',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace',
-                lineHeight: 1.6,
-                fontSize: '0.88rem',
-                position: 'relative',
-              }}
-            >
-              {/* Wax Seal Stamp */}
-              <div
-                className="dossier-seal-badge verified wax-seal-animate"
-                style={{
-                  position: 'absolute',
-                  top: '1.25rem',
-                  right: '1.5rem',
-                  zIndex: 5,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                title="Cryptographic Chain-of-Custody Sealed"
-              >
-                <SealedDossierIcon size={22} verified={true} />
-                <span style={{ fontSize: '0.48rem', fontWeight: 800, letterSpacing: '0.05em', marginTop: '1px' }}>SEALED</span>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--btc-orange)', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', paddingRight: '60px' }}>
-                <Lock size={12} />
-                CONFIDENTIAL FORENSIC DOSSIER &bull; CLASSIFIED LAW ENFORCEMENT EXHIBIT
-              </div>
-              <pre
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  wordWrap: 'break-word',
-                  fontFamily: 'inherit',
-                  margin: 0,
-                  color: 'var(--text-main)',
-                }}
-              >
-                {selectedCase.narrative_report}
-              </pre>
-            </div>
-          </div>
-        ) : (
-          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
-            Select a case file to view full forensic dossier.
-          </div>
-        )}
+                  return (
+                    <tr
+                      key={cData.case_id}
+                      onClick={() => onSelectCase && onSelectCase(cData)}
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? 'var(--bg-elevated)' : undefined,
+                      }}
+                    >
+                      <td>
+                        <SealedDossierIcon size={20} verified={isVerified} />
+                      </td>
+                      <td>
+                        <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-emphasis)' }}>
+                          {cData.case_id}
+                        </span>
+                      </td>
+                      <td>
+                        <CopyHash value={cData.target_id} label="Target" truncateLength={6} />
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.82rem' }}>
+                          {cData.title || `Forensic Dossier ${cData.case_id}`}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {entityCount}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {eventCount}
+                        </span>
+                      </td>
+                      <td>
+                        <StatusBadge status={cData.status || 'OPEN'} size="sm" />
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onSelectCase) onSelectCase(cData);
+                            }}
+                          >
+                            Inspect
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => handleExportJSON(e, cData)}
+                            title="Export JSON"
+                          >
+                            <Download size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

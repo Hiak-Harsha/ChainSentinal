@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
   Search,
   Filter,
-  ShieldAlert,
-  GitBranch,
-  FileCheck,
-  Radio,
-  Clock,
-  X,
   Sliders,
 } from 'lucide-react';
-import { api } from '../api';
-import { CopyHash, RiskGauge, StatusBadge, useToast } from './shared';
+import { CopyHash, RiskGauge, StatusBadge } from './shared';
 import { getTypologyIcon } from './visuals/icons';
 import { RadarEmptyState } from './visuals/RadarEmptyState';
 
@@ -21,17 +13,11 @@ export default function AlertCenterView({
   alerts = [],
   selectedAlert,
   onSelectAlert,
-  onCloseDetail,
-  onLaunchTrace,
-  onLaunchInvestigate,
-  onStatusUpdated,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [gradeFilter, setGradeFilter] = useState('ALL');
   const [minRisk, setMinRisk] = useState(0.0);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-  const toast = useToast();
 
   // Filter alerts
   const filteredAlerts = alerts.filter((a) => {
@@ -51,34 +37,22 @@ export default function AlertCenterView({
     return matchesSearch && matchesStatus && matchesGrade && matchesRisk;
   });
 
-  const handleUpdateStatus = async (alertId, newStatus) => {
-    setUpdatingStatus(true);
-    try {
-      await api.updateAlertStatus(alertId, newStatus);
-      if (onStatusUpdated) onStatusUpdated(alertId, newStatus);
-    } catch (err) {
-      toast?.showToast(`Failed to update status: ${err.message}`, 'error');
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
-
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
       {/* Search & Filter Toolbar */}
       <div
         className="card"
         style={{
-          marginBottom: '1.5rem',
+          marginBottom: '1rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: 'var(--space-4)',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: '280px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: '280px' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search
               size={16}
@@ -101,8 +75,8 @@ export default function AlertCenterView({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
             <Filter size={15} />
             <span>Status:</span>
             <select
@@ -119,7 +93,7 @@ export default function AlertCenterView({
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
             <Sliders size={15} />
             <span>Grade:</span>
             <select
@@ -134,7 +108,7 @@ export default function AlertCenterView({
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
             <span>Min Risk:</span>
             <select
               className="select"
@@ -149,7 +123,7 @@ export default function AlertCenterView({
         </div>
       </div>
 
-      {/* Alerts Table */}
+      {/* Alerts Table (Full Width, List-Only) */}
       <div className="card">
         <div className="card-header">
           <div>
@@ -158,7 +132,7 @@ export default function AlertCenterView({
               Ranked Investigative Leads ({filteredAlerts.length})
             </div>
             <div className="card-subtitle">
-              Section 7 NTRO Compliance with Conformal Set Bounds &amp; TreeSHAP Rationale
+              Section 7 NTRO Compliance &bull; Select any row to inspect SHAP rationale in the Inspector Panel
             </div>
           </div>
         </div>
@@ -174,13 +148,13 @@ export default function AlertCenterView({
                 <th>Conformal Grade</th>
                 <th>Attributed Origin IP</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {filteredAlerts.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ padding: '2rem 1rem' }}>
+                  <td colSpan="8" style={{ padding: 'var(--space-6) var(--space-4)' }}>
                     <RadarEmptyState
                       title="FORENSIC RADAR ACTIVE"
                       subtitle="No anomalous transaction patterns detected matching current filter criteria."
@@ -195,9 +169,17 @@ export default function AlertCenterView({
                   const grade = a.confidence?.grade || 'B';
                   const ip = a.attribution?.ip || 'N/A';
                   const status = a.status || 'NEW';
+                  const isSelected = selectedAlert?.alert_id === a.alert_id;
 
                   return (
-                    <tr key={a.alert_id}>
+                    <tr
+                      key={a.alert_id}
+                      onClick={() => onSelectAlert && onSelectAlert(a)}
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? 'var(--bg-elevated)' : undefined,
+                      }}
+                    >
                       <td>
                         <RiskGauge score={priority} variant="bar" size="sm" showLabel={false} />
                       </td>
@@ -208,12 +190,12 @@ export default function AlertCenterView({
                         <CopyHash value={a.entity_id} label="Entity Target" truncateLength={6} />
                       </td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <div style={{ padding: '0.25rem', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', display: 'flex' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                          <div style={{ padding: 'var(--space-1)', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', display: 'flex' }}>
                             {getTypologyIcon(topTyp, { size: 18 })}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600, color: 'var(--btc-orange)' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-emphasis)' }}>
                               {topTyp.replace('T_', '').replace(/_/g, ' ')}
                             </span>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
@@ -248,7 +230,10 @@ export default function AlertCenterView({
                       <td>
                         <button
                           className="btn btn-secondary btn-sm"
-                          onClick={() => onSelectAlert(a)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectAlert) onSelectAlert(a);
+                          }}
                         >
                           Deep Dive
                         </button>
@@ -261,319 +246,6 @@ export default function AlertCenterView({
           </table>
         </div>
       </div>
-
-      {/* Deep Dive Modal Dialog */}
-      <AnimatePresence>
-        {selectedAlert && (
-          <motion.div
-            className="modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onCloseDetail}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(6, 9, 17, 0.75)',
-              backdropFilter: 'blur(6px)',
-              zIndex: 999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '1.5rem',
-            }}
-          >
-            <motion.div
-              className="modal-card"
-              initial={{ scale: 0.95, opacity: 0, y: 15 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: '100%',
-                maxWidth: '920px',
-                maxHeight: '90vh',
-                overflowY: 'auto',
-                backgroundColor: '#0b1120',
-                border: '1px solid rgba(0, 240, 255, 0.25)',
-                borderRadius: '12px',
-                padding: '1.5rem',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-              }}
-            >
-              {/* Modal Header */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  paddingBottom: '1rem',
-                  marginBottom: '1.25rem',
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div
-                      style={{
-                        padding: '0.45rem',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        display: 'flex',
-                      }}
-                    >
-                      {getTypologyIcon(selectedAlert.typologies?.[0]?.name, { size: 24 })}
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
-                        Investigative Dossier: {selectedAlert.entity_id}
-                      </h3>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Alert:</span>
-                        <CopyHash value={selectedAlert.alert_id} label="Alert ID" truncateLength={8} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={onCloseDetail}
-                  style={{ padding: '0.35rem 0.5rem' }}
-                  aria-label="Close detail modal"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Quick Actions & Triage Status Bar */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.75rem',
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  padding: '0.75rem 1rem',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: '1.25rem',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem' }}>
-                  <Clock size={15} style={{ color: 'var(--btc-orange)' }} />
-                  <span>Triage Status:</span>
-                  <select
-                    className="select"
-                    value={selectedAlert.status || 'NEW'}
-                    disabled={updatingStatus}
-                    onChange={(e) => handleUpdateStatus(selectedAlert.alert_id, e.target.value)}
-                  >
-                    <option value="NEW">NEW</option>
-                    <option value="INVESTIGATING">INVESTIGATING</option>
-                    <option value="ESCALATED">ESCALATED</option>
-                    <option value="RESOLVED">RESOLVED</option>
-                    <option value="CLOSED_FALSE_POSITIVE">FALSE POSITIVE</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => onLaunchTrace(selectedAlert.entity_id)}
-                  >
-                    <GitBranch size={14} />
-                    Trace Taint Flows
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onLaunchInvestigate(selectedAlert.entity_id)}
-                  >
-                    <FileCheck size={14} />
-                    Build Case Dossier
-                  </button>
-                </div>
-              </div>
-
-              {/* Modal Body: 2 Columns */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
-                {/* Left Column: AI Decision & Conformal Guarantees */}
-                <div>
-                  {/* Risk & Conformal Reliability Card */}
-                  <div className="card" style={{ marginBottom: '1rem', padding: '1.25rem' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '1rem', color: 'var(--text-main)' }}>
-                      Risk Magnitude &amp; Statistical Reliability
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', marginBottom: '1.25rem' }}>
-                      <RiskGauge
-                        score={selectedAlert.priority ?? selectedAlert.risk_score ?? 0}
-                        variant="radial"
-                        size="lg"
-                      />
-
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem' }}>
-                        <StatusBadge
-                          status={selectedAlert.confidence?.grade || 'B'}
-                          size="md"
-                          showDot={false}
-                          className="font-bold"
-                        />
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-                          Conformal Reliability
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.75rem' }}>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-                        Guaranteed 90% coverage prediction set:
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
-                        {selectedAlert.confidence?.conformal_set?.map((cls) => (
-                          <span
-                            key={cls}
-                            className="badge badge-cyan"
-                            style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                          >
-                            {getTypologyIcon(cls, { size: 14 })}
-                            <span>{cls.replace('T_', '').replace(/_/g, ' ')}</span>
-                          </span>
-                        )) || <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>No set recorded</span>}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Network Attribution Card */}
-                  <div className="card" style={{ padding: '1.25rem' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Radio size={16} style={{ color: 'var(--btc-gold)' }} />
-                      Network-Layer Attribution
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.82rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: 'var(--text-dim)' }}>Origin IP:</span>
-                        <CopyHash value={selectedAlert.attribution?.ip || 'N/A'} label="IP Address" />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-dim)' }}>Location &amp; ASN:</span>
-                        <span>
-                          {selectedAlert.attribution?.country || 'Unknown'}, {selectedAlert.attribution?.asn || 'N/A'}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-dim)' }}>Confidence / Posterior:</span>
-                        <span className="mono">
-                          {selectedAlert.attribution?.confidence != null
-                            ? `${(selectedAlert.attribution.confidence * 100).toFixed(1)}%`
-                            : selectedAlert.attribution?.score != null
-                            ? `${(selectedAlert.attribution.score * 100).toFixed(1)}%`
-                            : '—'}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-dim)' }}>Derivation Basis:</span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                          {selectedAlert.attribution?.derivation || 'TF-IDF broadcast de-biasing'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: TreeSHAP Feature Attributions & Evidence */}
-                <div>
-                  <div className="card" style={{ marginBottom: '1rem', padding: '1.25rem' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.85rem', color: 'var(--text-main)' }}>
-                      TreeSHAP Forensic Risk Drivers
-                    </div>
-
-                    {selectedAlert.reasons && selectedAlert.reasons.length > 0 ? (
-                      selectedAlert.reasons.map((r, idx) => {
-                        const hasShap = r.shap_value !== undefined && r.shap_value !== null;
-                        const shap = hasShap ? r.shap_value : null;
-                        const isPositive = shap !== null && shap >= 0;
-                        const pctWidth = shap !== null ? Math.min(100, Math.max(12, Math.abs(shap) * 65)) : 0;
-
-                        return (
-                          <div key={idx} style={{ marginBottom: '0.85rem' }}>
-                            <div className="shap-bar-row">
-                              <span className="shap-label" title={r.feature}>
-                                {r.feature?.replace(/_/g, ' ')}
-                              </span>
-                              <div className="shap-bar-track" style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                                {shap !== null && (
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${pctWidth}%` }}
-                                    transition={{ duration: 0.5, delay: idx * 0.05 }}
-                                    style={{
-                                      height: '100%',
-                                      backgroundColor: isPositive ? 'var(--btc-orange)' : 'var(--crimson)',
-                                      borderRadius: '4px',
-                                      boxShadow: `0 0 6px ${isPositive ? 'var(--btc-orange-glow)' : 'var(--crimson)'}`,
-                                    }}
-                                  />
-                                )}
-                              </div>
-                              <span className="shap-val" style={{ fontFamily: 'monospace', fontSize: '0.75rem', minWidth: '42px', textAlign: 'right' }}>
-                                {shap !== null ? (isPositive ? `+${shap.toFixed(2)}` : shap.toFixed(2)) : '—'}
-                              </span>
-                            </div>
-
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', paddingLeft: '0.25rem', marginTop: '0.2rem' }}>
-                              {r.text}
-                              {r.percentile != null && (
-                                <>
-                                  {' '}&bull;{' '}
-                                  <span style={{ color: 'var(--amber)', fontWeight: 600 }}>
-                                    {r.percentile.toFixed(1)}% percentile
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>
-                        No granular SHAP feature attributions available for this record.
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Evidence Bundle Hash */}
-                  <div className="card" style={{ padding: '1.25rem' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.4rem', color: 'var(--text-main)' }}>
-                      Tamper-Evident Evidence Digest
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
-                      SHA-256 canonical hash of the investigative evidence bundle:
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <CopyHash
-                        value={selectedAlert.evidence?.bundle_hash || 'SHA256-DIGEST-PENDING'}
-                        label="Bundle Hash"
-                        truncate={false}
-                        className="w-full justify-between"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

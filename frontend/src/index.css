@@ -8,21 +8,53 @@
    chain's core concepts — mining, BTC amounts). Cyan is demoted to a
    secondary "system is live" indicator used sparingly (WebSocket pulse,
    active-trace highlight) rather than the default color of everything.
+
+   USAGE DISCIPLINE — read before adding any color to a component:
+   --btc-orange   → ONLY: primary CTA buttons, the live/active-trace
+                    indicator, BTC-denominated monetary values, and the
+                    landing sequence. Nowhere else. Do not use for
+                    default borders, default hover states, or default
+                    focus rings — those use --border-focus-neutral (new,
+                    see below) unless the element IS one of the four
+                    cases above.
+   --network-cyan → ONLY: WebSocket-live pulse indicator, active-trace
+                    highlight on the graph. Not a general accent.
+   --risk-critical/high/low → ONLY semantic risk/status meaning. Never
+                    reused for decoration.
+   Everything else → neutral surfaces/text/borders. If you're reaching
+   for --btc-orange because "it needs to stand out," that's a signal to
+   use --text-highlight or --bg-card-hover instead — reserve the accent
+   for the cases listed above so it retains meaning.
    ========================================================================== */
 
 :root {
+  /* 8px Spacing System Scale */
+  --space-badge-tight: 0.15rem; /* tight icon-badge exception */
+  --space-1: 0.25rem;   /* 4px  — tight inline gaps (icon-to-label) */
+  --space-2: 0.5rem;    /* 8px  — default small gap */
+  --space-3: 0.75rem;   /* 12px — default component padding */
+  --space-4: 1rem;      /* 16px — card padding, standard gap */
+  --space-5: 1.5rem;    /* 24px — section spacing */
+  --space-6: 2rem;      /* 32px — major section breaks */
+  --space-8: 3rem;      /* 48px — page-level breathing room */
+
   /* Base surfaces — dark with warm undertone, not generic navy */
   --bg-base: #0a0806;
   --bg-surface: #120e0a;
   --bg-card: rgba(24, 18, 12, 0.82);
   --bg-card-hover: rgba(36, 27, 16, 0.9);
+  --bg-elevated: rgba(40, 32, 22, 0.6);   /* a step up from --bg-card without being orange-tinted */
   --bg-input: #16110b;
   --bg-accent-subtle: rgba(247, 147, 26, 0.08);
 
-  /* Borders */
+  /* Genuine Neutral Tier & Borders */
   --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-focus: #f7931a;
-  --border-card: rgba(247, 147, 26, 0.2);
+  --border-neutral: rgba(255, 255, 255, 0.12);
+  --border-neutral-hover: rgba(255, 255, 255, 0.22);
+  --border-focus-neutral: rgba(255, 255, 255, 0.35);
+  --border-focus: var(--border-focus-neutral);
+  --border-card: var(--border-neutral);
+  --text-emphasis: #ffffff;                /* for "this label matters" without color */
 
   /* PRIMARY: Bitcoin ledger identity — this now leads, not cyan */
   --btc-orange: #f7931a;
@@ -159,10 +191,10 @@ h1, h2, h3, h4, h5, h6 {
   width: 32px;
   height: 32px;
   background: linear-gradient(135deg, rgba(247, 147, 26, 0.25), rgba(232, 163, 61, 0.3));
-  border: 1px solid var(--btc-orange);
+  border: 1px solid var(--border-neutral);
   border-radius: var(--radius-sm);
   color: var(--btc-orange);
-  box-shadow: 0 0 10px var(--btc-orange-glow);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .command-bar .brand-name {
@@ -174,11 +206,11 @@ h1, h2, h3, h4, h5, h6 {
 
 .command-bar .brand-tag {
   font-size: 0.6rem;
-  padding: 0.1rem 0.35rem;
-  background: var(--btc-orange-subtle);
-  border: 1px solid rgba(247, 147, 26, 0.4);
+  padding: 0.15rem 0.25rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-neutral);
   border-radius: var(--radius-sm);
-  color: var(--btc-orange);
+  color: var(--text-muted);
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -195,15 +227,15 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   color: var(--text-main);
-  padding: 0.35rem 0.75rem 0.35rem 2rem;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
   font-size: 0.8rem;
   outline: none;
   transition: border-color 0.2s ease;
 }
 
 .command-bar-search input:focus {
-  border-color: var(--btc-orange);
-  box-shadow: 0 0 8px var(--btc-orange-glow);
+  border-color: var(--border-focus-neutral);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .command-bar-search .search-icon {
@@ -235,7 +267,7 @@ h1, h2, h3, h4, h5, h6 {
 .command-bar-kpi .kpi-num {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-weight: 800;
-  color: var(--btc-orange);
+  color: var(--text-emphasis);
 }
 
 .command-bar-status {
@@ -249,7 +281,7 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
+  padding: 0.25rem 0.5rem;
   border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 600;
@@ -281,7 +313,7 @@ h1, h2, h3, h4, h5, h6 {
   transition: color 0.2s;
 }
 
-.alert-bell-btn:hover { color: var(--btc-orange); }
+.alert-bell-btn:hover { color: var(--text-emphasis); }
 
 .alert-bell-btn .bell-count {
   position: absolute;
@@ -297,7 +329,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 3px;
+  padding: 0 0.25rem;
 }
 
 /* ---------- Mode Switcher ---------- */
@@ -305,7 +337,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 0.2rem;
-  padding: 0.2rem;
+  padding: 0.25rem;
   background: rgba(18, 14, 10, 0.8);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -315,8 +347,8 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.6rem;
+  gap: var(--space-2);
+  padding: 0.25rem 0.5rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -334,9 +366,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .mode-btn.active {
-  color: var(--btc-orange);
-  background: var(--btc-orange-subtle);
-  box-shadow: 0 0 8px var(--btc-orange-glow);
+  color: var(--text-emphasis);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-neutral-hover);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 /* ---------- Workspace Grid ---------- */
@@ -379,8 +412,8 @@ h1, h2, h3, h4, h5, h6 {
 .rail-entity-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.5rem;
+  gap: var(--space-2);
+  padding: 0.5rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.15s;
@@ -392,8 +425,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .rail-entity-item.selected {
-  background: var(--btc-orange-subtle);
-  border-left: 2px solid var(--btc-orange);
+  background: var(--bg-elevated);
+  border-left: 2px solid var(--border-focus-neutral);
 }
 
 .rail-entity-dot {
@@ -430,9 +463,10 @@ h1, h2, h3, h4, h5, h6 {
   position: absolute;
   inset: 0;
   overflow-y: auto;
-  background: rgba(10, 8, 6, 0.96);
+  background: rgba(10, 8, 6, 0.90);
+  backdrop-filter: blur(6px);
   z-index: 5;
-  padding: 1.25rem;
+  padding: 1.5rem;
 }
 
 /* ---------- Inspector Panel (right drawer) ---------- */
@@ -495,7 +529,7 @@ h1, h2, h3, h4, h5, h6 {
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  padding: 0.2rem;
+  padding: 0.25rem;
   transition: color 0.15s;
 }
 .inspector-close-btn:hover { color: var(--text-main); }
@@ -539,7 +573,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Legacy aliases for components not yet migrated */
 .app-main {
   flex: 1;
-  padding: 1.25rem;
+  padding: 1rem;
   width: 100%;
 }
 
@@ -565,7 +599,7 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: 1rem;
   box-shadow: var(--shadow-card);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -667,8 +701,8 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  padding: 0.55rem 1rem;
+  gap: var(--space-2);
+  padding: 0.5rem 1rem;
   font-size: 0.85rem;
   font-weight: 600;
   border-radius: var(--radius-md);
@@ -712,7 +746,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-sm {
-  padding: 0.35rem 0.65rem;
+  padding: 0.25rem 0.5rem;
   font-size: 0.78rem;
 }
 
@@ -721,15 +755,15 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-main);
-  padding: 0.55rem 0.85rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input:focus {
-  border-color: var(--btc-orange);
-  box-shadow: 0 0 8px var(--btc-orange-glow);
+  border-color: var(--border-focus-neutral);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .select {
@@ -737,7 +771,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-main);
-  padding: 0.55rem 0.85rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   outline: none;
   cursor: pointer;
@@ -750,7 +784,7 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
+  padding: 0.25rem 0.5rem;
   border-radius: var(--radius-full);
   font-size: 0.72rem;
   font-weight: 700;
@@ -840,7 +874,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .table td {
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--text-main);
   vertical-align: middle;
@@ -877,7 +911,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
   background: rgba(11, 17, 32, 0.85);
   backdrop-filter: blur(12px);
-  padding: 0.4rem;
+  padding: 0.5rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
 }
@@ -891,7 +925,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 1rem;
   background: rgba(11, 17, 32, 0.85);
   backdrop-filter: blur(12px);
-  padding: 0.5rem 0.85rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   font-size: 0.75rem;
@@ -930,7 +964,7 @@ h1, h2, h3, h4, h5, h6 {
   background: #0c1222;
   border-left: 1px solid var(--border-subtle);
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.6);
-  padding: 1.75rem;
+  padding: 1.5rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -962,7 +996,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-  padding: 1.75rem;
+  padding: 1.5rem;
   overflow-y: auto;
   animation: fade-scale 0.2s ease-out;
 }
@@ -1150,7 +1184,7 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.25rem 0.5rem;
   border-radius: var(--radius-full);
   background: var(--btc-orange-subtle);
   border: 1px solid rgba(247, 147, 26, 0.35);
@@ -1279,7 +1313,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.85rem 1.1rem;
+  padding: 0.75rem 1rem;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -1287,9 +1321,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .pipeline-flow-step.active {
-  border-color: var(--btc-orange);
-  background: var(--btc-orange-subtle);
-  box-shadow: 0 0 12px var(--btc-orange-glow);
+  border-color: var(--border-focus-neutral);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.08);
 }
 
 .pipeline-flow-step.completed {

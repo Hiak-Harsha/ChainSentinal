@@ -42,6 +42,7 @@ export default function CommandBar({
       {/* Brand */}
       <div className="brand-compact">
         <motion.div
+          layoutId="chainsentinel-brand-logo"
           className="brand-logo"
           whileHover={{ scale: 1.08, rotate: 3 }}
           transition={{ type: 'spring', stiffness: 350, damping: 18 }}
@@ -95,14 +96,19 @@ export default function CommandBar({
         {riskScore !== null && (
           <div className="command-bar-kpi">
             <span>Risk:</span>
-            <span className="kpi-num" style={{ color: riskScore > 0.7 ? 'var(--crimson)' : 'var(--btc-orange)' }}>
+            <span
+              className="kpi-num"
+              style={{
+                color: riskScore > 0.7 ? 'var(--crimson)' : riskScore > 0.4 ? 'var(--amber)' : 'var(--emerald)',
+              }}
+            >
               {(riskScore * 100).toFixed(0)}%
             </span>
           </div>
         )}
         <div className="command-bar-kpi" style={{ gap: '0.45rem' }}>
           <span>Velocity:</span>
-          <AlertSparkline width={100} height={22} color="var(--btc-orange)" />
+          <AlertSparkline width={100} height={22} color="var(--amber)" />
         </div>
       </div>
 

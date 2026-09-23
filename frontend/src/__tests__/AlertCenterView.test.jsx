@@ -1,9 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import AlertCenterView from '../components/AlertCenterView';
 import { ToastProvider } from '../components/shared/Toast';
-import { api } from '../api';
 
 vi.mock('../api', () => ({
   api: {
@@ -26,7 +25,7 @@ vi.mock('framer-motion', () => {
 
 const renderWithToast = (ui) => render(<ToastProvider>{ui}</ToastProvider>);
 
-describe('AlertCenterView Component', () => {
+describe('AlertCenterView Component (List-Only Overlay)', () => {
   const mockAlerts = [
     {
       alert_id: 'ALT-101',
@@ -68,10 +67,31 @@ describe('AlertCenterView Component', () => {
   it('filters alerts by status select dropdown', () => {
     renderWithToast(<AlertCenterView alerts={mockAlerts} />);
 
-    // Get all select dropdowns (search, status, grade, risk)
     const selects = screen.getAllByRole('combobox');
     const statusSelect = selects[0]; // first select is status
     fireEvent.change(statusSelect, { target: { value: 'NEW' } });
+
+    expect(screen.getByText('ALT-101')).toBeInTheDocument();
+    expect(screen.queryByText('ALT-102')).not.toBeInTheDocument();
+  });
+
+  it('filters alerts by grade select dropdown', () => {
+    renderWithToast(<AlertCenterView alerts={mockAlerts} />);
+
+    const selects = screen.getAllByRole('combobox');
+    const gradeSelect = selects[1]; // second select is grade
+    fireEvent.change(gradeSelect, { target: { value: 'A' } });
+
+    expect(screen.getByText('ALT-101')).toBeInTheDocument();
+    expect(screen.queryByText('ALT-102')).not.toBeInTheDocument();
+  });
+
+  it('filters alerts by minimum risk score', () => {
+    renderWithToast(<AlertCenterView alerts={mockAlerts} />);
+
+    const selects = screen.getAllByRole('combobox');
+    const riskSelect = selects[2]; // third select is min risk
+    fireEvent.change(riskSelect, { target: { value: '0.7' } });
 
     expect(screen.getByText('ALT-101')).toBeInTheDocument();
     expect(screen.queryByText('ALT-102')).not.toBeInTheDocument();
@@ -88,57 +108,13 @@ describe('AlertCenterView Component', () => {
     expect(onSelectAlert).toHaveBeenCalledWith(expect.objectContaining({ alert_id: 'ALT-101' }));
   });
 
-  it('updates alert status from modal select dropdown', async () => {
-    api.updateAlertStatus.mockResolvedValue({ status: 'success' });
-    const onStatusUpdated = vi.fn();
+  it('triggers onSelectAlert when table row is clicked', () => {
+    const onSelectAlert = vi.fn();
+    renderWithToast(<AlertCenterView alerts={mockAlerts} onSelectAlert={onSelectAlert} />);
 
-    renderWithToast(
-      <AlertCenterView
-        alerts={mockAlerts}
-        selectedAlert={mockAlerts[0]}
-        onStatusUpdated={onStatusUpdated}
-      />
-    );
+    const typologyCell = screen.getByText('Dusting Attack');
+    fireEvent.click(typologyCell);
 
-    // Find the triage status select in the modal
-    const triageSelect = screen.getByDisplayValue('NEW');
-    fireEvent.change(triageSelect, { target: { value: 'INVESTIGATING' } });
-
-    await waitFor(() => {
-      expect(api.updateAlertStatus).toHaveBeenCalledWith('ALT-101', 'INVESTIGATING');
-      expect(onStatusUpdated).toHaveBeenCalledWith('ALT-101', 'INVESTIGATING');
-    });
-  });
-
-  it('triggers onLaunchTrace when Trace button in modal is clicked', () => {
-    const onLaunchTrace = vi.fn();
-    renderWithToast(
-      <AlertCenterView
-        alerts={mockAlerts}
-        selectedAlert={mockAlerts[0]}
-        onLaunchTrace={onLaunchTrace}
-      />
-    );
-
-    const traceBtn = screen.getByRole('button', { name: /Trace Taint Flows/i });
-    fireEvent.click(traceBtn);
-
-    expect(onLaunchTrace).toHaveBeenCalledWith('ENT-ALPHA');
-  });
-
-  it('triggers onLaunchInvestigate when Case Dossier button is clicked', () => {
-    const onLaunchInvestigate = vi.fn();
-    renderWithToast(
-      <AlertCenterView
-        alerts={mockAlerts}
-        selectedAlert={mockAlerts[0]}
-        onLaunchInvestigate={onLaunchInvestigate}
-      />
-    );
-
-    const caseBtn = screen.getByRole('button', { name: /Build Case Dossier/i });
-    fireEvent.click(caseBtn);
-
-    expect(onLaunchInvestigate).toHaveBeenCalledWith('ENT-ALPHA');
+    expect(onSelectAlert).toHaveBeenCalledWith(expect.objectContaining({ alert_id: 'ALT-102' }));
   });
 });
