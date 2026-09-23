@@ -54,6 +54,49 @@ def list_alerts(
     return [a.get("alert_data", a) for a in raw_alerts]
 
 
+@router.get("/timeseries")
+def get_alerts_timeseries(bucket: str = Query("hour", description="Time bucket: hour or day")) -> list[dict[str, Any]]:
+    """Group alert counts by timestamp bucket for timeseries sparkline visualization."""
+    from collections import Counter
+    from datetime import datetime, timezone
+
+    db = get_db()
+    try:
+        rows = db.conn.execute(
+            "SELECT created_at FROM alerts WHERE created_at IS NOT NULL ORDER BY created_at ASC"
+        ).fetchall()
+    except Exception as err:
+        logger.warning("Failed querying alert timeseries: %s", err)
+        return []
+
+    if not rows:
+        return []
+
+    counts: Counter[str] = Counter()
+    for (ts,) in rows:
+        if not ts:
+            continue
+        try:
+            dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+            if bucket == "day":
+                key = dt.strftime("%Y-%m-%d")
+            else:
+                key = dt.strftime("%Y-%m-%dT%H:00:00Z")
+            counts[key] += 1
+        except Exception:
+            pass
+
+    sorted_items = sorted(counts.items())
+    return [{"bucket": k, "count": v} for k, v in sorted_items]
+
+
+@router.get("/feedback/list")
+def list_feedback(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
+    """List recent analyst feedback entries."""
+    db = get_db()
+    return db.list_alert_feedback(limit=limit)
+
+
 @router.get("/{alert_id}")
 def get_alert_detail(alert_id: str) -> dict[str, Any]:
     """Retrieve full investigative alert bundle by alert_id."""
@@ -155,9 +198,3 @@ def submit_alert_feedback(alert_id: str, payload: AlertFeedbackPayload) -> dict[
         "status": "success",
     }
 
-
-@router.get("/feedback/list")
-def list_feedback(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
-    """List recent analyst feedback entries."""
-    db = get_db()
-    return db.list_alert_feedback(limit=limit)

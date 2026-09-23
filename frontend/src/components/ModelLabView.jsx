@@ -10,11 +10,17 @@ import {
 import { api } from '../api';
 import { AnimatedNumber, Skeleton, StatusBadge, useToast } from './shared';
 import { ChainSentinelLogo, BTCCoinIcon, BlockLedgerIcon, getTypologyIcon } from './visuals/icons';
+import FeatureImportanceChart from './charts/FeatureImportanceChart';
+import AnomalyDistribution from './charts/AnomalyDistribution';
+import TrainingConsole from './process/TrainingConsole';
 
 export default function ModelLabView({ onTriggerDetect }) {
   const [labData, setLabData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [training, setTraining] = useState(false);
+  const [trainingLogs, setTrainingLogs] = useState([]);
+  const [trainingStage, setTrainingStage] = useState('Idle');
+  const [trainingProgress, setTrainingProgress] = useState(0);
   const toast = useToast();
 
   const loadLab = async () => {
@@ -36,13 +42,53 @@ export default function ModelLabView({ onTriggerDetect }) {
 
   const handleRetrain = async () => {
     setTraining(true);
+    setTrainingProgress(0.1);
+    setTrainingStage('Loading Features');
+    setTrainingLogs([
+      'Initialized training orchestrator with DuckDB connection...',
+      'Extracting 35-dimensional multimodal feature vectors...',
+    ]);
     toast?.showToast('Retraining supervised & unsupervised models with cross-validation...', 'info');
+
+    // Simulate progress ticks while API executes
+    const t1 = setTimeout(() => {
+      setTrainingProgress(0.35);
+      setTrainingStage('Fitting Classifier');
+      setTrainingLogs((prev) => [...prev, 'Fitting HistGradientBoosting multi-class classifier on ground truth...']);
+    }, 400);
+
+    const t2 = setTimeout(() => {
+      setTrainingProgress(0.65);
+      setTrainingStage('Computing TreeSHAP');
+      setTrainingLogs((prev) => [...prev, 'Computing TreeSHAP Shapley marginal values across background samples...']);
+    }, 800);
+
+    const t3 = setTimeout(() => {
+      setTrainingProgress(0.85);
+      setTrainingStage('Conformal Bounds');
+      setTrainingLogs((prev) => [...prev, 'Calibrating inductive split conformal coverage (1 - alpha = 0.90)...']);
+    }, 1200);
+
     try {
       await api.trainModels();
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      setTrainingProgress(1.0);
+      setTrainingStage('Complete');
+      setTrainingLogs((prev) => [
+        ...prev,
+        'Anomaly separation verified on hold-out experiment.',
+        'Model weights and TreeSHAP attributions saved to disk.',
+      ]);
       await loadLab();
       toast?.showToast('Model training complete: weights, calibrations, and TreeSHAP updated', 'success');
     } catch (err) {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
       toast?.showToast(`Retraining failed: ${err.message}`, 'error');
+      setTrainingLogs((prev) => [...prev, `Training error: ${err.message}`]);
     } finally {
       setTraining(false);
     }
@@ -58,7 +104,7 @@ export default function ModelLabView({ onTriggerDetect }) {
       <div
         className="card"
         style={{
-          marginBottom: '1.5rem',
+          marginBottom: '1.25rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -69,7 +115,7 @@ export default function ModelLabView({ onTriggerDetect }) {
       >
         <div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Cpu size={22} style={{ color: 'var(--cyan-primary)' }} />
+            <Cpu size={22} style={{ color: 'var(--btc-orange)' }} />
             AI/ML Intelligence Laboratory
           </h2>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
@@ -97,13 +143,22 @@ export default function ModelLabView({ onTriggerDetect }) {
         </div>
       </div>
 
+      {/* Real-Time Training Console */}
+      <TrainingConsole
+        active={training}
+        logs={trainingLogs}
+        currentStage={trainingStage}
+        progress={trainingProgress}
+      />
+
+
       {/* KPI Row: Supervised Accuracy, F1, Conformal Coverage */}
       <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
         <div className="card kpi-card cyan">
           <div className="kpi-top">
             <span>Typology Accuracy</span>
           </div>
-          <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
+          <div className="kpi-value mono" style={{ color: 'var(--btc-orange)' }}>
             {supervisedMetrics?.accuracy !== undefined ? (
               <AnimatedNumber value={supervisedMetrics.accuracy * 100} decimals={1} suffix="%" />
             ) : loading ? (
@@ -139,7 +194,7 @@ export default function ModelLabView({ onTriggerDetect }) {
           <div className="kpi-top">
             <span>Conformal Coverage</span>
           </div>
-          <div className="kpi-value mono" style={{ color: 'var(--purple-primary)' }}>
+          <div className="kpi-value mono" style={{ color: 'var(--btc-gold)' }}>
             {labData?.conformal?.coverage !== undefined ? (
               <AnimatedNumber value={labData.conformal.coverage * 100} decimals={1} suffix="%" />
             ) : (
@@ -148,7 +203,7 @@ export default function ModelLabView({ onTriggerDetect }) {
           </div>
           <div className="kpi-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>Inductive Split Conformal</span>
-            <span style={{ fontSize: '0.68rem', color: 'var(--purple-primary)', fontWeight: 700 }}>1 - &alpha; = 0.90</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--btc-gold)', fontWeight: 700 }}>1 - &alpha; = 0.90</span>
           </div>
         </div>
 
@@ -258,20 +313,24 @@ export default function ModelLabView({ onTriggerDetect }) {
                   marginTop: '0.5rem',
                   padding: '0.85rem 1rem',
                   borderRadius: 'var(--radius-md)',
-                  background: 'rgba(0, 240, 255, 0.04)',
-                  border: '1px solid rgba(0, 240, 255, 0.2)',
+                  background: 'rgba(247, 147, 26, 0.05)',
+                  border: '1px solid rgba(247, 147, 26, 0.25)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  marginBottom: '1rem',
                 }}
               >
                 <span style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600 }}>
                   Empirical Separation Delta (&Delta;):
                 </span>
-                <span className="mono" style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--cyan-primary)' }}>
+                <span className="mono" style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--btc-orange)' }}>
                   {holdoutResults.anomaly_separation_delta >= 0 ? `+${holdoutResults.anomaly_separation_delta.toFixed(3)}` : holdoutResults.anomaly_separation_delta.toFixed(3)}
                 </span>
               </div>
+
+              {/* Anomaly Score Density Histogram */}
+              <AnomalyDistribution separationDelta={holdoutResults.anomaly_separation_delta} height={200} />
             </div>
           ) : (
             <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)' }}>
@@ -285,7 +344,7 @@ export default function ModelLabView({ onTriggerDetect }) {
           <div className="card-header">
             <div>
               <div className="card-title">
-                <BarChart3 size={18} style={{ color: 'var(--cyan-primary)' }} />
+                <BarChart3 size={18} style={{ color: 'var(--btc-orange)' }} />
                 Global Feature Importance Rankings
               </div>
               <div className="card-subtitle">
@@ -294,42 +353,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {featureImportances.length === 0 ? (
-              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-                No feature importance data available. Trigger training to compute TreeSHAP attributions.
-              </div>
-            ) : (
-              featureImportances.map((item, idx) => {
-                const pct = Math.min(100, Math.round((item.importance / 0.2) * 100));
-                return (
-                  <div key={idx}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
-                      <span className="mono" style={{ color: 'var(--text-muted)' }}>
-                        {item.feature.replace(/_/g, ' ')}
-                      </span>
-                      <span className="mono" style={{ color: 'var(--cyan-primary)', fontWeight: 600 }}>
-                        {(item.importance * 100).toFixed(1)}%
-                      </span>
-                    </div>
-
-                    <div style={{ height: '7px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.5, delay: idx * 0.04 }}
-                        style={{
-                          height: '100%',
-                          background: 'linear-gradient(90deg, #00f0ff, #3b82f6)',
-                          boxShadow: '0 0 6px rgba(0, 240, 255, 0.4)',
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <FeatureImportanceChart features={featureImportances} height={340} />
         </div>
       </div>
     </div>

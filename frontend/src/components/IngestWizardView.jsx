@@ -61,7 +61,7 @@ export default function IngestWizardView() {
       >
         <div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <UploadCloud size={22} style={{ color: 'var(--cyan-primary)' }} />
+            <UploadCloud size={22} style={{ color: 'var(--btc-orange)' }} />
             Ingestion &amp; Schema Mapping Wizard
           </h2>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
@@ -163,7 +163,7 @@ export default function IngestWizardView() {
           <div className="card-header">
             <div>
               <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ShieldCheck size={18} style={{ color: 'var(--cyan-primary)' }} />
+                <ShieldCheck size={18} style={{ color: 'var(--btc-orange)' }} />
                 Data Quality &amp; Quarantine Audit
               </div>
               <div className="card-subtitle">

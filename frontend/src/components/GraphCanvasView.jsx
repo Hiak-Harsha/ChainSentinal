@@ -446,7 +446,7 @@ export default function GraphCanvasView({
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <ShieldAlert size={18} style={{ color: selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--cyan-primary)' }} />
+                    <ShieldAlert size={18} style={{ color: selectedNode.risk > 0.6 ? 'var(--crimson)' : 'var(--btc-orange)' }} />
                     <h3 style={{ fontSize: '1.15rem', color: '#fff', fontWeight: 700 }}>
                       Node Inspector: {selectedNode.type}
                     </h3>

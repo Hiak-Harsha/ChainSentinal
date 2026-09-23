@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import { AnimatedNumber, CopyHash, StatusBadge, useToast } from './shared';
 import { BTCCoinIcon, TaintFlowIcon, BlockLedgerIcon } from './visuals/icons';
+import TaintDecayVisualizer from './process/TaintDecayVisualizer';
 
-export default function TaintPathfinderView({ prefilledTarget = '' }) {
+export default function TaintPathfinderView({ prefilledTarget = '', onTraceCompleted }) {
   const [subTab, setSubTab] = useState('taint'); // 'taint' or 'path'
 
   // Taint Trace State
@@ -47,6 +48,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
         amount: amount ? parseInt(amount) : null,
       });
       setTraceResult(res);
+      if (onTraceCompleted) onTraceCompleted(res);
       toast?.showToast(`Trace complete: ${res.hops?.length ?? 0} downstream hops mapped`, 'success');
     } catch (err) {
       toast?.showToast(`Trace failed: ${err.message}`, 'error');
@@ -114,7 +116,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
               <div className="card-header">
                 <div>
                   <div className="card-title">
-                    <GitBranch size={18} style={{ color: 'var(--cyan-primary)' }} />
+                    <GitBranch size={18} style={{ color: 'var(--btc-orange)' }} />
                     Dynamic Taint Dispersion Simulator
                   </div>
                   <div className="card-subtitle">
@@ -231,7 +233,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                       ? 'var(--crimson)'
                       : decayModel === 'fifo'
                       ? 'var(--amber)'
-                      : 'var(--cyan-primary)'
+                      : 'var(--btc-orange)'
                   }
                 />
                 <div>
@@ -272,7 +274,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <div className="kpi-top">
                       <span>Traversed Hops</span>
                     </div>
-                    <div className="kpi-value mono" style={{ color: 'var(--cyan-primary)' }}>
+                    <div className="kpi-value mono" style={{ color: 'var(--btc-orange)' }}>
                       <AnimatedNumber value={traceResult.hops?.length ?? 0} />
                     </div>
                     <div className="kpi-meta">
@@ -308,7 +310,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <div className="kpi-top">
                       <span>Decay Algorithm</span>
                     </div>
-                    <div className="kpi-value mono" style={{ color: 'var(--purple-primary)', textTransform: 'uppercase', fontSize: '1.25rem' }}>
+                    <div className="kpi-value mono" style={{ color: 'var(--btc-gold)', textTransform: 'uppercase', fontSize: '1.25rem' }}>
                       {traceResult.summary?.decay_model}
                     </div>
                     <div className="kpi-meta">
@@ -316,6 +318,14 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Taint Saturation Decay Corridor */}
+                {traceResult.hops && traceResult.hops.length > 0 && (
+                  <TaintDecayVisualizer
+                    hops={traceResult.hops}
+                    decayModel={traceResult.summary?.decay_model || decayModel}
+                  />
+                )}
 
                 {/* Horizontal Hop Conduit */}
                 {traceResult.hops && traceResult.hops.length > 0 && (
@@ -361,7 +371,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                         {i < traceResult.hops.length - 1 && (
                           <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, padding: '0 0.3rem' }}>
                             <div className="satoshi-packet" style={{ color: 'var(--btc-orange)', fontSize: '0.75rem' }}>●</div>
-                            <div style={{ width: '18px', height: '2px', background: 'var(--cyan-primary)', opacity: 0.5 }} />
+                            <div style={{ width: '18px', height: '2px', background: 'var(--btc-orange)', opacity: 0.5 }} />
                           </div>
                         )}
                       </React.Fragment>
@@ -373,7 +383,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                 <div className="card">
                   <div className="card-header">
                     <div className="card-title">
-                      <TrendingDown size={18} style={{ color: 'var(--cyan-primary)' }} />
+                      <TrendingDown size={18} style={{ color: 'var(--btc-orange)' }} />
                       Multi-Hop Taint Flow Ledger ({traceResult.hops?.length ?? 0} Steps)
                     </div>
                   </div>
@@ -433,7 +443,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                                 </span>
                               </td>
                               <td>
-                                <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--purple-primary)' }}>
+                                <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--btc-gold)' }}>
                                   {h.origin_ip || 'UNKNOWN'}
                                 </span>
                               </td>
@@ -467,7 +477,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
               <div className="card-header">
                 <div>
                   <div className="card-title">
-                    <Navigation size={18} style={{ color: 'var(--cyan-primary)' }} />
+                    <Navigation size={18} style={{ color: 'var(--btc-orange)' }} />
                     Forensic Corridor &amp; Bottleneck Pathfinder
                   </div>
                   <div className="card-subtitle">
@@ -557,7 +567,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                       <div style={{ padding: '0.75rem 1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Bottleneck Capacity</div>
-                        <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--cyan-primary)' }}>
+                        <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--network-cyan)' }}>
                           {pathResult.bottleneck_sat != null ? `${pathResult.bottleneck_sat.toLocaleString()} sat` : '—'}
                         </div>
                       </div>
@@ -595,7 +605,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <span className="badge badge-cyan">Hop {h.hop_index}</span>
                             <CopyHash value={h.source_entity} label="Source Entity" truncateLength={6} />
-                            <ArrowRight size={16} style={{ color: 'var(--cyan-primary)' }} />
+                            <ArrowRight size={16} style={{ color: 'var(--btc-orange)' }} />
                             <CopyHash value={h.target_entity} label="Target Entity" truncateLength={6} />
                           </div>
 
@@ -603,7 +613,7 @@ export default function TaintPathfinderView({ prefilledTarget = '' }) {
                             <span className="mono" style={{ fontWeight: 700, color: '#fff' }}>
                               {h.volume_sat != null ? `${h.volume_sat.toLocaleString()} sat` : '—'}
                             </span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--purple-primary)' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--btc-gold)' }}>
                               IP: {h.origin_ips?.[0] || 'Relay'}
                             </span>
                           </div>

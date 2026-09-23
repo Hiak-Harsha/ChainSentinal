@@ -52,10 +52,17 @@ class EntityResolver:
         self.cj_detector = CoinJoinDetector(min_equal_outputs=min_coinjoin_outputs)
         self.change_detector = ChangeAddressDetector(confidence_threshold=change_threshold)
 
-    def run(self) -> tuple[ResolutionSummary, HeteroGraph]:
+    def run(
+        self,
+        progress_callback: Any = None,
+    ) -> tuple[ResolutionSummary, HeteroGraph]:
         """Execute complete entity resolution and heterogeneous graph construction."""
         start_time = time.time()
         summary = ResolutionSummary()
+
+        if progress_callback:
+            progress_callback({"stage": "loading_data", "progress": 0.05})
+
 
         # 1. Fetch data from DuckDB
         data = self.db.get_clustering_data()
@@ -128,6 +135,9 @@ class EntityResolver:
                 dsu.union(root_addr, other_addr)
                 address_method[other_addr] = ("CIOH_COSPEND", 1.0)
 
+        if progress_callback:
+            progress_callback({"stage": "cioh_clustering", "progress": 0.35, "coinjoin_excluded": len(coinjoin_txids)})
+
         # 4. Change-Address Heuristic pass
         change_linked_count = 0
         for txid, in_list in tx_inputs.items():
@@ -159,6 +169,9 @@ class EntityResolver:
 
         summary.change_addresses_linked = change_linked_count
 
+        if progress_callback:
+            progress_callback({"stage": "extracting_components", "progress": 0.65, "change_linked": change_linked_count})
+
         # 5. Ensure all output addresses are registered in DSU
         for out_list in tx_outputs.values():
             for out in out_list:
@@ -172,6 +185,10 @@ class EntityResolver:
         components = dsu.get_components()
         summary.total_addresses = len(dsu)
         summary.total_entities = len(components)
+
+        if progress_callback:
+            progress_callback({"stage": "persisting_graph", "progress": 0.85, "total_entities": len(components)})
+
 
         entities_batch: list[dict[str, Any]] = []
         aem_batch: list[dict[str, Any]] = []

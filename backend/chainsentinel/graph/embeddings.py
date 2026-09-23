@@ -27,6 +27,17 @@ class EntitySimilarityEngine:
         self._feature_matrix: np.ndarray | None = None
         self._entity_indices: dict[str, int] = {}
         self._entity_metadata: dict[str, dict[str, Any]] = {}
+        self._similarity_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
+
+    def clear_cache(self) -> None:
+        """Clear indexed feature matrix and similarity search cache."""
+        self._cached_entities.clear()
+        self._feature_matrix = None
+        self._entity_indices.clear()
+        self._entity_metadata.clear()
+        self._similarity_cache.clear()
+        logger.info("Cleared EntitySimilarityEngine cache")
+
 
     def build_index(self) -> int:
         """Extract multi-dimensional topological vectors for all resolved entities in DuckDB."""
@@ -126,6 +137,10 @@ class EntitySimilarityEngine:
 
     def find_similar(self, entity_id: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Find the top-K most structurally similar entities to the target entity."""
+        cache_key = (entity_id, top_k)
+        if cache_key in self._similarity_cache:
+            return self._similarity_cache[cache_key]
+
         if self._feature_matrix is None or len(self._cached_entities) == 0:
             self.build_index()
 
@@ -160,4 +175,11 @@ class EntitySimilarityEngine:
             if len(results) >= top_k:
                 break
 
+        # Evict oldest entry if cache exceeds 128 items
+        if len(self._similarity_cache) >= 128:
+            oldest_key = next(iter(self._similarity_cache))
+            del self._similarity_cache[oldest_key]
+        self._similarity_cache[cache_key] = results
+
         return results
+

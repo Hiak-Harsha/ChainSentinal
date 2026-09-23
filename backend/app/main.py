@@ -23,6 +23,7 @@ from app.api.alerts import router as alerts_router
 from app.api.models import router as models_router
 from app.api.trace import router as trace_router
 from app.api.ws import router as ws_router
+from app.api.jobs import router as jobs_router
 from app.core.audit import AuditLogMiddleware
 from app.core.config import settings
 from app.core.logging_config import setup_logging
@@ -90,6 +91,7 @@ app.include_router(correlate_router, prefix="/api", dependencies=[Depends(verify
 app.include_router(alerts_router, prefix="/api", dependencies=[Depends(verify_api_key)])
 app.include_router(models_router, prefix="/api", dependencies=[Depends(verify_api_key)])
 app.include_router(trace_router, prefix="/api", dependencies=[Depends(verify_api_key)])
+app.include_router(jobs_router, prefix="/api", dependencies=[Depends(verify_api_key)])
 app.include_router(ws_router, prefix="/api")
 app.include_router(ws_router)
 

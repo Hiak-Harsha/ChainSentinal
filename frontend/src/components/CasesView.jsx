@@ -91,7 +91,7 @@ export default function CasesView({ prefilledTarget = '' }) {
       >
         <div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <FileText size={22} style={{ color: 'var(--cyan-primary)' }} />
+            <FileText size={22} style={{ color: 'var(--btc-orange)' }} />
             Autonomous Forensic Case Dossiers
           </h2>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
@@ -126,7 +126,7 @@ export default function CasesView({ prefilledTarget = '' }) {
         <div className="card" style={{ height: '700px', display: 'flex', flexDirection: 'column' }}>
           <div className="card-header">
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FolderOpen size={16} style={{ color: 'var(--cyan-primary)' }} />
+              <FolderOpen size={16} style={{ color: 'var(--btc-orange)' }} />
               Directory ({cases.length})
             </div>
           </div>
@@ -149,16 +149,16 @@ export default function CasesView({ prefilledTarget = '' }) {
                     style={{
                       padding: '0.85rem',
                       borderRadius: 'var(--radius-md)',
-                      background: isSelected ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                      border: `1px solid ${isSelected ? 'rgba(0, 240, 255, 0.35)' : 'var(--border-subtle)'}`,
+                      background: isSelected ? 'var(--btc-orange-subtle)' : 'rgba(255, 255, 255, 0.02)',
+                      border: `1px solid ${isSelected ? 'var(--btc-orange)' : 'var(--border-subtle)'}`,
                       cursor: 'pointer',
-                      boxShadow: isSelected ? '0 0 15px rgba(0, 240, 255, 0.1)' : 'none',
+                      boxShadow: isSelected ? '0 0 15px var(--btc-orange-glow)' : 'none',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
                       <SealedDossierIcon size={20} verified={cData.status === 'RESOLVED' || cData.status === 'SEALED'} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
-                        <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--cyan-primary)' : '#fff' }}>
+                        <span className="mono" style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--btc-orange)' : '#fff' }}>
                           {cData.case_id}
                         </span>
                         <StatusBadge status={cData.status || 'OPEN'} size="sm" />
@@ -312,7 +312,7 @@ export default function CasesView({ prefilledTarget = '' }) {
                 <span style={{ fontSize: '0.48rem', fontWeight: 800, letterSpacing: '0.05em', marginTop: '1px' }}>SEALED</span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--cyan-primary)', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', paddingRight: '60px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--btc-orange)', fontSize: '0.72rem', letterSpacing: '0.08em', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', paddingRight: '60px' }}>
                 <Lock size={12} />
                 CONFIDENTIAL FORENSIC DOSSIER &bull; CLASSIFIED LAW ENFORCEMENT EXHIBIT
               </div>

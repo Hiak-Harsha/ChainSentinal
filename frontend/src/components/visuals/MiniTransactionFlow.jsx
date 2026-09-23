@@ -98,17 +98,17 @@ export const MiniTransactionFlow = ({
           style={{
             padding: '0.75rem',
             borderRadius: 'var(--radius-md)',
-            background: activeNode === 'tx' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(6, 9, 17, 0.8)',
-            border: `1px solid ${activeNode === 'tx' ? 'var(--cyan-primary)' : 'rgba(0, 242, 254, 0.35)'}`,
+            background: activeNode === 'tx' ? 'var(--btc-orange-subtle)' : 'rgba(18, 14, 10, 0.8)',
+            border: `1px solid ${activeNode === 'tx' ? 'var(--btc-orange)' : 'rgba(247, 147, 26, 0.35)'}`,
             textAlign: 'center',
             cursor: 'pointer',
             transition: 'all 0.2s ease',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.3rem' }}>
-            <BlockLedgerIcon size={22} color="var(--cyan-primary)" />
+            <BlockLedgerIcon size={22} color="var(--btc-orange)" />
           </div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--cyan-primary)' }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--btc-orange)' }}>
             1-IN / 2-OUT
           </div>
           <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
@@ -192,7 +192,7 @@ export const MiniTransactionFlow = ({
           {activeNode === 'forward' && 'Forwarded output routed directly toward darknet exchange deposit address.'}
           {!activeNode && 'Hover over UTXO nodes to inspect automated heuristic decomposition rationale.'}
         </span>
-        <span style={{ color: 'var(--cyan-primary)', fontSize: '0.68rem', fontWeight: 600 }}>
+        <span style={{ color: 'var(--btc-orange)', fontSize: '0.68rem', fontWeight: 600 }}>
           CONFORMAL CONF: 96.4%
         </span>
       </div>

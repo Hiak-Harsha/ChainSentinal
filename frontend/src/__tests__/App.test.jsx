@@ -19,14 +19,19 @@ vi.mock('../api', () => ({
     getProfiles: vi.fn().mockResolvedValue([]),
     getModelLab: vi.fn().mockResolvedValue({ models: {}, metrics: {} }),
     runDetection: vi.fn().mockResolvedValue([]),
+    getAlertTimeseries: vi.fn().mockResolvedValue([{ bucket: 'T-1', count: 2 }, { bucket: 'Now', count: 4 }]),
+    getSimilarEntities: vi.fn().mockResolvedValue([]),
+    submitAlertFeedback: vi.fn().mockResolvedValue({}),
+    startJob: vi.fn().mockResolvedValue({ job_id: 'mock_job' }),
+    getJobStatus: vi.fn().mockResolvedValue({ status: 'completed' }),
   },
 }));
 
 // Mock framer-motion to avoid animation issues in jsdom
 vi.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, ...props }) => <div {...props}>{children}</div>,
-    span: ({ children, ...props }) => <span {...props}>{children}</span>,
+    div: ({ children, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <div {...props}>{children}</div>,
+    span: ({ children, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <span {...props}>{children}</span>,
   },
   AnimatePresence: ({ children }) => <>{children}</>,
   useSpring: (initial) => ({ set: vi.fn(), get: () => initial }),
@@ -60,47 +65,55 @@ describe('ChainSentinel App Integration', () => {
     api.getEntities.mockResolvedValue([]);
   });
 
-  it('renders the header with branding and navigation tabs', async () => {
+  it('renders the CommandBar branding, mode switcher, and workspace shell', async () => {
     render(<App />);
 
     await waitFor(() => {
       expect(screen.getByText('ChainSentinel')).toBeInTheDocument();
     });
 
+    expect(screen.getByText('NTRO SIH-2026')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Search entities, alerts, addresses/i)).toBeInTheDocument();
+
+    // CommandBar modes
     expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('Alert Center')).toBeInTheDocument();
-    expect(screen.getByText('Link Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Taint & Pathfinder')).toBeInTheDocument();
-    expect(screen.getByText('Model Lab')).toBeInTheDocument();
-    expect(screen.getByText('Case Files')).toBeInTheDocument();
-    expect(screen.getByText('Ingest Wizard')).toBeInTheDocument();
+    expect(screen.getByText('Network')).toBeInTheDocument();
+    expect(screen.getByText('Alerts')).toBeInTheDocument();
+    expect(screen.getByText('Taint')).toBeInTheDocument();
+    expect(screen.getByText('Models')).toBeInTheDocument();
+    expect(screen.getByText('Ingest')).toBeInTheDocument();
+
+    // Context Rail & Inspector Panel
+    expect(screen.getByText('Recent Entities')).toBeInTheDocument();
+    expect(screen.getByText('Saved Filters')).toBeInTheDocument();
+    expect(screen.getByText('No Selection')).toBeInTheDocument();
   });
 
-  it('switches views when navigation tabs are clicked', async () => {
+  it('switches modes when CommandBar mode buttons are clicked', async () => {
     render(<App />);
 
     await waitFor(() => {
       expect(screen.getByText('ChainSentinel')).toBeInTheDocument();
     });
 
-    // Switch to Alert Center tab
-    const alertsBtn = screen.getByText('Alert Center');
+    // Switch to Alerts mode
+    const alertsBtn = screen.getByRole('button', { name: /Alerts/i });
     fireEvent.click(alertsBtn);
 
     await waitFor(() => {
       expect(screen.getAllByText(/Alert/i).length).toBeGreaterThan(0);
     });
 
-    // Switch to Taint & Pathfinder tab
-    const taintBtn = screen.getByText('Taint & Pathfinder');
+    // Switch to Taint mode
+    const taintBtn = screen.getByRole('button', { name: /Taint/i });
     fireEvent.click(taintBtn);
 
     await waitFor(() => {
       expect(screen.getAllByText(/Taint/i).length).toBeGreaterThan(0);
     });
 
-    // Switch to Model Lab tab
-    const modelsBtn = screen.getByText('Model Lab');
+    // Switch to Models mode
+    const modelsBtn = screen.getByRole('button', { name: /Models/i });
     fireEvent.click(modelsBtn);
 
     await waitFor(() => {

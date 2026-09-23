@@ -91,4 +91,83 @@ describe('ChainSentinel API Client', () => {
       expect.anything()
     );
   });
+
+  it('calls getSimilarEntities with encoded entity ID and top_k parameter', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => [{ entity_id: 'ENT_target', similarity_score: 0.95 }],
+    });
+
+    const res = await api.getSimilarEntities('ENT_abc/123', 8);
+    expect(res).toEqual([{ entity_id: 'ENT_target', similarity_score: 0.95 }]);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/graph/entities/ENT_abc%2F123/similar?top_k=8',
+      expect.anything()
+    );
+  });
+
+  it('submits alert feedback payload via POST in submitAlertFeedback', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 'feedback_recorded', verdict: 'confirmed_malicious' }),
+    });
+
+    const res = await api.submitAlertFeedback('ALT_99', 'confirmed_malicious', 'Operator confirmed');
+    expect(res.status).toBe('feedback_recorded');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/alerts/ALT_99/feedback',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ verdict: 'confirmed_malicious', notes: 'Operator confirmed' }),
+      })
+    );
+  });
+
+  it('fetches alert timeseries with specified bucket interval', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => [{ bucket: '2026-09-24T00:00:00Z', count: 4, mean_risk: 0.82 }],
+    });
+
+    const res = await api.getAlertTimeseries('day');
+    expect(res).toHaveLength(1);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/alerts/timeseries?bucket=day',
+      expect.anything()
+    );
+  });
+
+  it('manages background jobs with startJob and getJobStatus', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ job_id: 'job_456', status: 'pending' }),
+    });
+
+    const startRes = await api.startJob('/graph/cluster', { async_mode: true });
+    expect(startRes.job_id).toBe('job_456');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/graph/cluster',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ async_mode: true }),
+      })
+    );
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ job_id: 'job_456', status: 'completed', result: { clusters: 12 } }),
+    });
+
+    const statusRes = await api.getJobStatus('job_456');
+    expect(statusRes.status).toBe('completed');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/jobs/job_456',
+      expect.anything()
+    );
+  });
 });

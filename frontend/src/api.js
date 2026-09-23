@@ -116,6 +116,12 @@ export const api = {
     }),
   getCases: () => request('/trace/cases'),
   getCaseFile: (caseId) => request(`/trace/cases/${encodeURIComponent(caseId)}`),
+  getCaseTimeline: (caseId) => request(`/trace/cases/${encodeURIComponent(caseId)}/timeline`),
+  addCaseTimelineEvent: (caseId, event) =>
+    request(`/trace/cases/${encodeURIComponent(caseId)}/timeline`, {
+      method: 'POST',
+      body: JSON.stringify(event),
+    }),
 
   // AI/ML Model Lab
   getModelLab: () => request('/models/lab'),
@@ -126,7 +132,27 @@ export const api = {
       body: JSON.stringify({ min_risk_score: minRisk, limit }),
     }),
 
+  // Active Learning & Timeseries
+  getSimilarEntities: (entityId, topK = 5) =>
+    request(`/graph/entities/${encodeURIComponent(entityId)}/similar?top_k=${topK}`),
+  submitAlertFeedback: (alertId, verdict, notes = '') =>
+    request(`/alerts/${encodeURIComponent(alertId)}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({ verdict, notes }),
+    }),
+  getAlertFeedback: (limit = 50) => request(`/alerts/feedback/list?limit=${limit}`),
+  getAlertTimeseries: (bucket = 'hour') => request(`/alerts/timeseries?bucket=${bucket}`),
+
   // Ingestion & Schema Wizard
   getIngestJobs: () => request('/ingest/jobs'),
   getIngestProfiles: () => request('/ingest/profiles'),
+
+  // Background Jobs
+  startJob: (endpoint, body = {}) =>
+    request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  getJobStatus: (jobId) => request(`/jobs/${encodeURIComponent(jobId)}`),
 };
+

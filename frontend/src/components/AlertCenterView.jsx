@@ -213,7 +213,7 @@ export default function AlertCenterView({
                             {getTypologyIcon(topTyp, { size: 18 })}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600, color: 'var(--cyan-primary)' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--btc-orange)' }}>
                               {topTyp.replace('T_', '').replace(/_/g, ' ')}
                             </span>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
@@ -365,7 +365,7 @@ export default function AlertCenterView({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem' }}>
-                  <Clock size={15} style={{ color: 'var(--cyan-primary)' }} />
+                  <Clock size={15} style={{ color: 'var(--btc-orange)' }} />
                   <span>Triage Status:</span>
                   <select
                     className="select"
@@ -451,7 +451,7 @@ export default function AlertCenterView({
                   {/* Network Attribution Card */}
                   <div className="card" style={{ padding: '1.25rem' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Radio size={16} style={{ color: 'var(--purple-primary)' }} />
+                      <Radio size={16} style={{ color: 'var(--btc-gold)' }} />
                       Network-Layer Attribution
                     </div>
 
@@ -517,9 +517,9 @@ export default function AlertCenterView({
                                     transition={{ duration: 0.5, delay: idx * 0.05 }}
                                     style={{
                                       height: '100%',
-                                      backgroundColor: isPositive ? 'var(--cyan-primary)' : 'var(--crimson)',
+                                      backgroundColor: isPositive ? 'var(--btc-orange)' : 'var(--crimson)',
                                       borderRadius: '4px',
-                                      boxShadow: `0 0 6px ${isPositive ? 'var(--cyan-primary)' : 'var(--crimson)'}`,
+                                      boxShadow: `0 0 6px ${isPositive ? 'var(--btc-orange-glow)' : 'var(--crimson)'}`,
                                     }}
                                   />
                                 )}

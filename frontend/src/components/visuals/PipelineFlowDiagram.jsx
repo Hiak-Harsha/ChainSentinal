@@ -3,11 +3,18 @@ import { BlockLedgerIcon, BTCCoinIcon, WalletClusterIcon } from './icons';
 
 /**
  * PipelineFlowDiagram
- * 4-stage data ingest visual showing:
- * Raw Ingest -> Streaming Parser -> DuckDB Graph Store -> CIOH & Taint Validated
+ * Generic multi-stage data or algorithm pipeline flow visualization.
+ * Can be used for:
+ * 1. Data Ingestion: Raw Ingest -> Streaming Parser -> DuckDB Graph Store -> CIOH & Taint Validated
+ * 2. Correlation Pipeline: Timing Analysis -> Behavioral Signature -> IP Attribution -> Cross-Cluster Validation
+ * 3. Detection Pipeline: Feature Extraction -> Classifier Inference -> Anomaly Separation -> Conformal Bounds
  */
-export const PipelineFlowDiagram = ({ currentStep = 1, fileCount = 0 }) => {
-  const steps = [
+export const PipelineFlowDiagram = ({
+  currentStep = 1,
+  fileCount = 0,
+  stages = null,
+}) => {
+  const defaultSteps = [
     {
       id: 1,
       title: 'Raw Ingest',
@@ -41,12 +48,14 @@ export const PipelineFlowDiagram = ({ currentStep = 1, fileCount = 0 }) => {
     },
   ];
 
+  const steps = stages || defaultSteps;
+
   return (
     <div style={{ marginBottom: '1.75rem' }}>
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: `repeat(${steps.length}, 1fr)`,
           gap: '0.85rem',
           position: 'relative',
         }}
@@ -54,20 +63,19 @@ export const PipelineFlowDiagram = ({ currentStep = 1, fileCount = 0 }) => {
         {steps.map((step) => {
           const isCompleted = currentStep > step.id;
           const isActive = currentStep === step.id;
-          const isUpcoming = currentStep < step.id;
 
           let borderColor = 'var(--border-subtle)';
-          let bgColor = 'rgba(15, 23, 42, 0.5)';
+          let bgColor = 'rgba(18, 14, 10, 0.6)';
           let iconColor = 'var(--text-dim)';
 
           if (isCompleted) {
-            borderColor = 'rgba(16, 185, 129, 0.4)';
-            bgColor = 'rgba(16, 185, 129, 0.06)';
+            borderColor = 'rgba(74, 222, 128, 0.4)';
+            bgColor = 'rgba(74, 222, 128, 0.06)';
             iconColor = 'var(--emerald)';
           } else if (isActive) {
-            borderColor = 'var(--cyan-primary)';
-            bgColor = 'rgba(0, 242, 254, 0.08)';
-            iconColor = 'var(--cyan-primary)';
+            borderColor = 'var(--btc-orange)';
+            bgColor = 'var(--btc-orange-subtle)';
+            iconColor = 'var(--btc-orange)';
           }
 
           return (
@@ -87,11 +95,11 @@ export const PipelineFlowDiagram = ({ currentStep = 1, fileCount = 0 }) => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: isActive ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                  background: isActive ? 'var(--btc-orange-subtle)' : 'rgba(255, 255, 255, 0.04)',
                   flexShrink: 0,
                 }}
               >
-                {step.icon(iconColor)}
+                {typeof step.icon === 'function' ? step.icon(iconColor) : step.icon}
               </div>
 
               <div style={{ overflow: 'hidden' }}>
@@ -99,7 +107,7 @@ export const PipelineFlowDiagram = ({ currentStep = 1, fileCount = 0 }) => {
                   style={{
                     fontSize: '0.78rem',
                     fontWeight: 700,
-                    color: isActive ? 'var(--cyan-primary)' : isCompleted ? 'var(--emerald)' : 'var(--text-muted)',
+                    color: isActive ? 'var(--btc-orange)' : isCompleted ? 'var(--emerald)' : 'var(--text-muted)',
                     whiteSpace: 'nowrap',
                     textOverflow: 'ellipsis',
                     overflow: 'hidden',
@@ -114,11 +122,36 @@ export const PipelineFlowDiagram = ({ currentStep = 1, fileCount = 0 }) => {
                     whiteSpace: 'nowrap',
                     textOverflow: 'ellipsis',
                     overflow: 'hidden',
-                    marginTop: '0.15rem',
                   }}
                 >
-                  {isCompleted ? 'Validated ✓' : step.subtitle}
+                  {step.subtitle}
                 </div>
+              </div>
+
+              {/* Status Indicator */}
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                {isCompleted && (
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: 'var(--emerald)',
+                      boxShadow: '0 0 6px var(--emerald)',
+                    }}
+                  />
+                )}
+                {isActive && (
+                  <span
+                    className="pulse-dot"
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      backgroundColor: 'var(--btc-orange)',
+                      boxShadow: '0 0 6px var(--btc-orange-glow)',
+                    }}
+                  />
+                )}
               </div>
             </div>
           );

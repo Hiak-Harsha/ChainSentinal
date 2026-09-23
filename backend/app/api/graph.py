@@ -22,42 +22,84 @@ router = APIRouter(prefix="/graph", tags=["Graph & Entity Resolution"])
 from chainsentinel.common.datasets import resolve_registered_ground_truth
 
 
+from fastapi.responses import JSONResponse
+from app.api.jobs import create_and_start_job, update_job
+from app.core.events import ForensicEvent, event_bus
+
+
 class ClusterRequest(BaseModel):
     change_threshold: float = Field(0.75, ge=0.0, le=1.0, description="Change address confidence threshold")
     min_coinjoin_outputs: int = Field(3, ge=2, le=20, description="Minimum outputs for CoinJoin detection")
     dataset_name: str | None = None
+    ground_truth_path: str | None = None
+    async_mode: bool = Field(False, description="Run as background job returning 202 Accepted")
 
 
-@router.post("/cluster")
-def trigger_clustering(request: Request, req: ClusterRequest = ClusterRequest()) -> dict[str, Any]:
-    """Run entity resolution (CIOH + CoinJoin exclusion + change heuristics) and build graph."""
+def _execute_clustering_sync(req_dict: dict[str, Any], job_id: str | None = None) -> dict[str, Any]:
     db = get_db()
+    change_threshold = req_dict.get("change_threshold", 0.75)
+    min_coinjoin_outputs = req_dict.get("min_coinjoin_outputs", 3)
+    dataset_name = req_dict.get("dataset_name")
+    ground_truth_path = req_dict.get("ground_truth_path")
+
+    def _progress(info: dict[str, Any]):
+        if job_id:
+            update_job(job_id, stage=info.get("stage", "clustering"), progress=info.get("progress", 0.5))
+        event_bus.publish_sync(ForensicEvent(type="cluster_merge", data=info))
+
     resolver = EntityResolver(
         db=db,
-        change_threshold=req.change_threshold,
-        min_coinjoin_outputs=req.min_coinjoin_outputs,
+        change_threshold=change_threshold,
+        min_coinjoin_outputs=min_coinjoin_outputs,
     )
-    summary, _ = resolver.run()
+    summary, _ = resolver.run(progress_callback=_progress)
     resp = {
         "status": "completed",
         "summary": summary.to_dict(),
     }
 
-    # If dataset_name provided or default exists, calculate evaluation metrics
+    # Evaluate ground truth if available
     gt_file: Path | None = None
-    try:
-        gt_file = resolve_registered_ground_truth(req.dataset_name)
-    except Exception:
-        gt_file = None
+    if ground_truth_path:
+        p = Path(ground_truth_path)
+        if p.exists():
+            gt_file = p
+    if not gt_file:
+        try:
+            gt_file = resolve_registered_ground_truth(dataset_name)
+        except Exception:
+            gt_file = None
 
     if gt_file and gt_file.exists():
         gt_map = ClusterEvaluator.load_ground_truth_map(gt_file)
-        # Fetch discovered map from DB
         res = db.conn.execute("SELECT address, entity_id FROM address_entity_map").fetchall()
         disc_map = dict(res)
         resp["eval_metrics"] = ClusterEvaluator.evaluate(disc_map, gt_map)
 
+    # Invalidate similarity cache since entities changed
+    from chainsentinel.graph.embeddings import EntitySimilarityEngine
+    EntitySimilarityEngine(db).clear_cache()
+
     return resp
+
+
+@router.post("/cluster")
+def trigger_clustering(request: Request, req: ClusterRequest = ClusterRequest()) -> Any:
+    """Run entity resolution (CIOH + CoinJoin exclusion + change heuristics) and build graph."""
+    is_async = (
+        req.async_mode
+        or request.query_params.get("async") == "true"
+        or request.query_params.get("async_mode") == "true"
+        or request.headers.get("prefer") == "respond-async"
+    )
+
+    if is_async:
+        req_dict = req.dict()
+        job = create_and_start_job("clustering", _execute_clustering_sync, req_dict)
+        return JSONResponse(status_code=202, content={"job_id": job.job_id, "status": "started"})
+
+    return _execute_clustering_sync(req.dict())
+
 
 
 @router.get("/entities")

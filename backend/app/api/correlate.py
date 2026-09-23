@@ -23,29 +23,56 @@ logger = logging.getLogger("chainsentinel.api.correlate")
 router = APIRouter(prefix="/correlate", tags=["Network Correlation"])
 
 
+from fastapi.responses import JSONResponse
+from app.api.jobs import create_and_start_job, update_job
+
+
 class CorrelateRunRequest(BaseModel):
     time_window_sec: float = Field(60.0, gt=0, le=3600, description="Temporal correlation window in seconds")
     p_value_thresh: float = Field(0.05, gt=0, le=1.0, description="Significance threshold for permutation test")
     num_permutations: int = Field(100, ge=10, le=10000, description="Number of Monte Carlo permutation rounds")
     dataset_name: str | None = None
+    ground_truth_path: str | None = None
+    async_mode: bool = Field(False, description="Run as background job returning 202 Accepted")
 
 
-@router.post("/run")
-def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRunRequest()) -> dict[str, Any]:
-    """Run full network-blockchain correlation engine and persist results."""
+def _execute_correlate_sync(req_dict: dict[str, Any], job_id: str | None = None) -> dict[str, Any]:
     db = get_db()
+    time_window_sec = req_dict.get("time_window_sec", 60.0)
+    p_value_thresh = req_dict.get("p_value_thresh", 0.05)
+    num_permutations = req_dict.get("num_permutations", 100)
+    dataset_name = req_dict.get("dataset_name")
+    ground_truth_path = req_dict.get("ground_truth_path")
+
+    if job_id:
+        update_job(job_id, stage="computing_timing", progress=0.2)
+    event_bus.publish_sync(ForensicEvent(type="correlate_stage", data={"stage": "computing_timing", "progress": 0.2}))
+
     engine = CorrelationEngine(
         db=db,
-        time_window_sec=req.time_window_sec,
-        p_value_thresh=req.p_value_thresh,
-        num_permutations=req.num_permutations,
+        time_window_sec=time_window_sec,
+        p_value_thresh=p_value_thresh,
+        num_permutations=num_permutations,
     )
+
+    if job_id:
+        update_job(job_id, stage="building_signatures", progress=0.4)
+    event_bus.publish_sync(ForensicEvent(type="correlate_stage", data={"stage": "building_signatures", "progress": 0.4}))
+
     summary, attributions = engine.run()
+
+    if job_id:
+        update_job(job_id, stage="running_permutation_test", progress=0.7)
+    event_bus.publish_sync(ForensicEvent(type="correlate_stage", data={"stage": "running_permutation_test", "progress": 0.7}))
 
     resp: dict[str, Any] = {
         "status": "completed",
         "summary": summary.to_dict(),
     }
+
+    if job_id:
+        update_job(job_id, stage="persisting_results", progress=0.9)
+    event_bus.publish_sync(ForensicEvent(type="correlate_stage", data={"stage": "persisting_results", "progress": 0.9}))
 
     # Broadcast event to live WebSocket clients
     event_bus.publish_sync(
@@ -58,13 +85,18 @@ def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRu
         )
     )
 
-    # Evaluate against ground truth if registered
+    # Evaluate against ground truth if registered or given path
     gt_file: Path | None = None
-    try:
-        gt_file = resolve_registered_ground_truth(req.dataset_name)
-    except Exception as err:
-        logger.debug("Failed resolving dataset ground truth %s: %s", req.dataset_name, err)
-        gt_file = None
+    if ground_truth_path:
+        p = Path(ground_truth_path)
+        if p.exists():
+            gt_file = p
+    if not gt_file:
+        try:
+            gt_file = resolve_registered_ground_truth(dataset_name)
+        except Exception as err:
+            logger.debug("Failed resolving dataset ground truth %s: %s", dataset_name, err)
+            gt_file = None
 
     if gt_file and gt_file.exists():
         aem_res = db.conn.execute("SELECT address, entity_id FROM address_entity_map").fetchall()
@@ -76,6 +108,25 @@ def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRu
         )
 
     return resp
+
+
+@router.post("/run")
+def trigger_correlation(request: Request, req: CorrelateRunRequest = CorrelateRunRequest()) -> Any:
+    """Run full network-blockchain correlation engine and persist results."""
+    is_async = (
+        req.async_mode
+        or request.query_params.get("async") == "true"
+        or request.query_params.get("async_mode") == "true"
+        or request.headers.get("prefer") == "respond-async"
+    )
+
+    if is_async:
+        req_dict = req.dict()
+        job = create_and_start_job("correlation", _execute_correlate_sync, req_dict)
+        return JSONResponse(status_code=202, content={"job_id": job.job_id, "status": "started"})
+
+    return _execute_correlate_sync(req.dict())
+
 
 
 @router.get("/entity/{entity_id}")
