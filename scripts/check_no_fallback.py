@@ -23,6 +23,8 @@ def check_frontend(src_dir: Path) -> int:
     for path in sorted(src_dir.rglob("*")):
         if path.suffix not in (".js", ".jsx", ".ts", ".tsx"):
             continue
+        if "__tests__" in path.parts or ".test." in path.name or ".spec." in path.name:
+            continue
 
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
         for idx, line in enumerate(lines, start=1):

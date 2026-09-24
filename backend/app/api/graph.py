@@ -107,10 +107,11 @@ def list_entities(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     entity_type: str | None = Query(None),
+    search: str | None = Query(None, description="Search filter by entity ID substring or type"),
 ) -> list[dict[str, Any]]:
     """List resolved entities sorted by address count and transaction volume."""
     db = get_db()
-    return db.list_entities(limit=limit, offset=offset, entity_type=entity_type)
+    return db.list_entities(limit=limit, offset=offset, entity_type=entity_type, search=search)
 
 
 @router.get("/entities/{entity_id}")

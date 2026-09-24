@@ -12,6 +12,7 @@ import {
 import { AnimatedNumber, CopyHash, StatusBadge, useToast } from './shared';
 import { BTCCoinIcon, TaintFlowIcon, BlockLedgerIcon } from './visuals/icons';
 import TaintDecayVisualizer from './process/TaintDecayVisualizer';
+import { api } from '../api';
 
 export default function TaintPathfinderView({ prefilledTarget = '', onTraceCompleted }) {
   const [subTab, setSubTab] = useState('taint'); // 'taint' or 'path'
@@ -492,6 +493,7 @@ export default function TaintPathfinderView({ prefilledTarget = '', onTraceCompl
                     Source Identifier (Entity ID, Address, or TXID)
                   </label>
                   <input
+                    id="pathfinder-source-input"
                     type="text"
                     className="input mono"
                     style={{ width: '100%' }}
@@ -506,6 +508,7 @@ export default function TaintPathfinderView({ prefilledTarget = '', onTraceCompl
                     Target Identifier (Entity ID, Address, or TXID)
                   </label>
                   <input
+                    id="pathfinder-target-input"
                     type="text"
                     className="input mono"
                     style={{ width: '100%' }}
@@ -520,6 +523,7 @@ export default function TaintPathfinderView({ prefilledTarget = '', onTraceCompl
                     Algorithm Strategy
                   </label>
                   <select
+                    id="pathfinder-strategy-select"
                     className="select"
                     style={{ width: '100%' }}
                     value={pathStrategy}
@@ -532,6 +536,7 @@ export default function TaintPathfinderView({ prefilledTarget = '', onTraceCompl
               </div>
 
               <button
+                id="btn-calculate-path"
                 className="btn btn-primary"
                 onClick={handleComputePath}
                 disabled={loadingPath || !pathSource || !pathTarget}

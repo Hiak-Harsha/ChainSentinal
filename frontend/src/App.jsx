@@ -1,17 +1,91 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, Suspense, lazy } from 'react';
 import CommandBar from './components/shell/CommandBar';
 import ContextRail from './components/shell/ContextRail';
 import InspectorPanel from './components/shell/InspectorPanel';
+import CommandPalette from './components/shell/CommandPalette';
 import NetworkCanvas from './components/NetworkCanvas';
 import OverviewView from './components/OverviewView';
-import AlertCenterView from './components/AlertCenterView';
-import TaintPathfinderView from './components/TaintPathfinderView';
-import CasesView from './components/CasesView';
-import ModelLabView from './components/ModelLabView';
-import IngestWizardView from './components/IngestWizardView';
 import { AnimatedLedgerBackdrop } from './components/visuals/AnimatedLedgerBackdrop';
 import { ToastProvider, useToast } from './components/shared/Toast';
+import Skeleton from './components/shared/Skeleton';
 import { api } from './api';
+
+const AlertCenterView = lazy(() => import('./components/AlertCenterView'));
+const TaintPathfinderView = lazy(() => import('./components/TaintPathfinderView'));
+const CasesView = lazy(() => import('./components/CasesView'));
+const ModelLabView = lazy(() => import('./components/ModelLabView'));
+const IngestWizardView = lazy(() => import('./components/IngestWizardView'));
+
+function ViewLoadingFallback({ label = 'Loading View' }) {
+  return (
+    <div
+      className="canvas-overlay"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(10, 14, 23, 0.85)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 50,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-6)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-subtle)',
+          background: 'var(--bg-surface)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+          minWidth: '320px',
+        }}
+      >
+        <div style={{ position: 'relative', width: '48px', height: '48px' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              border: '2px solid rgba(247, 147, 26, 0.2)',
+              borderTopColor: 'var(--color-primary)',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '1.1rem',
+              color: 'var(--color-primary)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            ₿
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-emphasis)', letterSpacing: '0.08em' }}>
+            {label.toUpperCase()}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            SYNCHRONIZING FORENSIC TELEMETRY...
+          </div>
+        </div>
+        <div style={{ width: '100%', marginTop: 'var(--space-2)' }}>
+          <Skeleton width="100%" height="6px" style={{ borderRadius: '3px' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AppContent() {
   const [mode, setMode] = useState('network');
@@ -31,6 +105,8 @@ function AppContent() {
   const [health, setHealth] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [metrics, setMetrics] = useState(null);
+  const [casesList, setCasesList] = useState([]);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [centerId, setCenterId] = useState('');
   const [hops, setHops] = useState(2);
   const [prefilledTarget, setPrefilledTarget] = useState('');
@@ -43,14 +119,16 @@ function AppContent() {
   // Load initial system data
   const refreshData = useCallback(async () => {
     try {
-      const [hData, aData, mData] = await Promise.all([
+      const [hData, aData, mData, cData] = await Promise.all([
         api.getHealth().catch(() => ({ status: 'error' })),
         api.getAlerts({ limit: 100 }).catch(() => []),
         api.getGraphMetrics().catch(() => null),
+        api.getCases().catch(() => []),
       ]);
       setHealth(hData);
       setAlerts(aData || []);
       setMetrics(mData);
+      setCasesList(cData || []);
     } catch (err) {
       console.error('Initial data fetch error:', err);
       toast?.showToast('Failed to connect to backend', 'error');
@@ -60,6 +138,69 @@ function AppContent() {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  // Pivot navigation
+  const pivotTo = useCallback(({ mode: nextMode, selection: nextSelection }) => {
+    if (nextMode) setMode(nextMode);
+    if (nextSelection !== undefined) {
+      setSelection(nextSelection);
+
+      // Track recent entities
+      if (nextSelection?.type === 'entity' && nextSelection?.id) {
+        setCenterId(nextSelection.id);
+        setRecentEntities((prev) => {
+          const filtered = prev.filter((e) => e.entity_id !== nextSelection.id);
+          const entityType = nextSelection.data?.entity_type || 'UNKNOWN';
+          return [{ entity_id: nextSelection.id, entity_type: entityType }, ...filtered].slice(0, 8);
+        });
+      }
+    }
+  }, []);
+
+  // Global Keyboard Shortcuts (Cmd/Ctrl+K, ?, 1-6 mode switching)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Cmd/Ctrl + K opens/toggles palette
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // If user is currently typing in an input or textarea, don't hijack keys
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+        return;
+      }
+
+      // '?' opens palette with shortcuts modal
+      if (e.key === '?') {
+        e.preventDefault();
+        setIsPaletteOpen(true);
+        return;
+      }
+
+      // Quick-switch modes with numeric keys 1-6
+      if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+        const modeMap = {
+          '1': 'overview',
+          '2': 'network',
+          '3': 'alerts',
+          '4': 'taint',
+          '5': 'models',
+          '6': 'ingest',
+        };
+        const next = modeMap[e.key];
+        if (next) {
+          e.preventDefault();
+          pivotTo({ mode: next });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pivotTo]);
 
   // Live WebSocket feed
   useEffect(() => {
@@ -117,24 +258,6 @@ function AppContent() {
       if (ws) ws.close();
     };
   }, [refreshData, toast]);
-
-  // Pivot navigation
-  const pivotTo = useCallback(({ mode: nextMode, selection: nextSelection }) => {
-    if (nextMode) setMode(nextMode);
-    if (nextSelection !== undefined) {
-      setSelection(nextSelection);
-
-      // Track recent entities
-      if (nextSelection?.type === 'entity' && nextSelection?.id) {
-        setCenterId(nextSelection.id);
-        setRecentEntities((prev) => {
-          const filtered = prev.filter((e) => e.entity_id !== nextSelection.id);
-          const entityType = nextSelection.data?.entity_type || 'UNKNOWN';
-          return [{ entity_id: nextSelection.id, entity_type: entityType }, ...filtered].slice(0, 8);
-        });
-      }
-    }
-  }, []);
 
   // Fetch contextual details when selection changes
   useEffect(() => {
@@ -278,6 +401,8 @@ function AppContent() {
         riskScore={metrics?.mean_risk_score ?? null}
         health={health}
         onAlertBellClick={() => pivotTo({ mode: 'alerts' })}
+        onOpenPalette={() => setIsPaletteOpen(true)}
+        onOpenShortcuts={() => setIsPaletteOpen(true)}
       />
 
       <div className="workspace-shell">
@@ -328,54 +453,64 @@ function AppContent() {
 
           {mode === 'alerts' && (
             <div className="canvas-overlay">
-              <AlertCenterView
-                alerts={alerts}
-                selectedAlert={selection?.type === 'alert' ? alertDetail : null}
-                onSelectAlert={(a) =>
-                  pivotTo({
-                    mode: 'alerts',
-                    selection: { type: 'alert', id: a.alert_id, data: a },
-                  })
-                }
-              />
+              <Suspense fallback={<ViewLoadingFallback label="Alert Center" />}>
+                <AlertCenterView
+                  alerts={alerts}
+                  selectedAlert={selection?.type === 'alert' ? alertDetail : null}
+                  onSelectAlert={(a) =>
+                    pivotTo({
+                      mode: 'alerts',
+                      selection: { type: 'alert', id: a.alert_id, data: a },
+                    })
+                  }
+                />
+              </Suspense>
             </div>
           )}
 
           {mode === 'taint' && (
             <div className="canvas-overlay">
-              <TaintPathfinderView
-                prefilledTarget={prefilledTarget}
-                onTraceCompleted={(traceResult) => {
-                  if (traceResult?.trace_id) {
-                    setSelection({ type: 'trace', id: traceResult.trace_id, data: traceResult });
-                  }
-                }}
-              />
+              <Suspense fallback={<ViewLoadingFallback label="Taint Pathfinder" />}>
+                <TaintPathfinderView
+                  prefilledTarget={prefilledTarget}
+                  onTraceCompleted={(traceResult) => {
+                    if (traceResult?.trace_id) {
+                      setSelection({ type: 'trace', id: traceResult.trace_id, data: traceResult });
+                    }
+                  }}
+                />
+              </Suspense>
             </div>
           )}
 
           {mode === 'cases' && (
             <div className="canvas-overlay">
-              <CasesView
-                prefilledTarget={prefilledTarget}
-                selectedCaseId={selection?.type === 'case' ? selection.id : null}
-                onSelectCase={(c) => {
-                  setActiveCase(c);
-                  setSelection({ type: 'case', id: c.case_id, data: c });
-                }}
-              />
+              <Suspense fallback={<ViewLoadingFallback label="Forensic Case Files" />}>
+                <CasesView
+                  prefilledTarget={prefilledTarget}
+                  selectedCaseId={selection?.type === 'case' ? selection.id : null}
+                  onSelectCase={(c) => {
+                    setActiveCase(c);
+                    setSelection({ type: 'case', id: c.case_id, data: c });
+                  }}
+                />
+              </Suspense>
             </div>
           )}
 
           {mode === 'models' && (
             <div className="canvas-overlay">
-              <ModelLabView onTriggerDetect={handleTriggerDetect} />
+              <Suspense fallback={<ViewLoadingFallback label="AI Model Lab" />}>
+                <ModelLabView onTriggerDetect={handleTriggerDetect} />
+              </Suspense>
             </div>
           )}
 
           {mode === 'ingest' && (
             <div className="canvas-overlay">
-              <IngestWizardView />
+              <Suspense fallback={<ViewLoadingFallback label="Data Ingestion Wizard" />}>
+                <IngestWizardView />
+              </Suspense>
             </div>
           )}
         </main>
@@ -393,6 +528,16 @@ function AppContent() {
           onInvestigate={handleLaunchInvestigate}
         />
       </div>
+
+      {/* Global Command Palette & Quick Search */}
+      <CommandPalette
+        isOpen={isPaletteOpen}
+        onClose={() => setIsPaletteOpen(false)}
+        onSelect={pivotTo}
+        alerts={alerts}
+        recentEntities={recentEntities}
+        cases={casesList}
+      />
     </div>
   );
 }

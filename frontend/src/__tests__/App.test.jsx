@@ -27,16 +27,6 @@ vi.mock('../api', () => ({
   },
 }));
 
-// Mock framer-motion to avoid animation issues in jsdom
-vi.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, layoutId, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <div {...props}>{children}</div>,
-    span: ({ children, layoutId, whileHover, whileTap, initial, animate, exit, transition, ...props }) => <span {...props}>{children}</span>,
-  },
-  AnimatePresence: ({ children }) => <>{children}</>,
-  useSpring: (initial) => ({ set: vi.fn(), get: () => initial }),
-  useTransform: (val, fn) => ({ get: () => (typeof fn === 'function' ? fn(0) : 0) }),
-}));
 
 // Mock canvas-based backdrop and animated numbers
 vi.mock('../components/visuals/AnimatedLedgerBackdrop', () => ({

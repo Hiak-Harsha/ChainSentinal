@@ -4,7 +4,8 @@ import {
   FileText,
   PlusCircle,
   FolderOpen,
-  Download,
+  Printer,
+  FileSpreadsheet,
   Calendar,
   Layers,
   Search,
@@ -64,17 +65,31 @@ export default function CasesView({
     }
   };
 
-  const handleExportJSON = (e, caseObj) => {
+  const handleExportHtml = async (e, caseObj) => {
     e.stopPropagation();
-    if (!caseObj) return;
-    const blob = new Blob([JSON.stringify(caseObj, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${caseObj.case_id || 'case_file'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast?.showToast(`Exported ${caseObj.case_id || 'case'}.json evidence bundle`, 'info');
+    const cData = caseObj.case_data || caseObj;
+    const caseId = cData.case_id;
+    if (!caseId) return;
+    try {
+      toast?.showToast(`Opening HTML forensic dossier for ${caseId}...`, 'info');
+      await api.exportCaseHtml(caseId);
+    } catch (err) {
+      toast?.showToast(`Export dossier failed: ${err.message}`, 'error');
+    }
+  };
+
+  const handleExportCsv = async (e, caseObj) => {
+    e.stopPropagation();
+    const cData = caseObj.case_data || caseObj;
+    const caseId = cData.case_id;
+    if (!caseId) return;
+    try {
+      toast?.showToast(`Downloading hops CSV for ${caseId}...`, 'info');
+      await api.exportCaseCsv(caseId);
+      toast?.showToast(`Downloaded ${caseId}_hops.csv`, 'success');
+    } catch (err) {
+      toast?.showToast(`Export hops CSV failed: ${err.message}`, 'error');
+    }
   };
 
   const filteredCases = cases.filter((c) => {
@@ -244,10 +259,19 @@ export default function CasesView({
                           </button>
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={(e) => handleExportJSON(e, cData)}
-                            title="Export JSON"
+                            onClick={(e) => handleExportHtml(e, cData)}
+                            title="Export Dossier (HTML/Print)"
                           >
-                            <Download size={12} />
+                            <Printer size={12} style={{ marginRight: '0.25rem' }} />
+                            Export Dossier
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => handleExportCsv(e, cData)}
+                            title="Export Hops (CSV)"
+                          >
+                            <FileSpreadsheet size={12} style={{ marginRight: '0.25rem' }} />
+                            Export Hops CSV
                           </button>
                         </div>
                       </td>

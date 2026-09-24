@@ -17,10 +17,6 @@ CREATE TABLE IF NOT EXISTS observations (
     sensor_id VARCHAR
 );
 
-CREATE INDEX IF NOT EXISTS idx_obs_txid ON observations (txid);
-CREATE INDEX IF NOT EXISTS idx_obs_src_ip ON observations (src_ip);
-CREATE INDEX IF NOT EXISTS idx_obs_ts ON observations (ts);
-
 -- Normalized blockchain transactions
 CREATE TABLE IF NOT EXISTS transactions (
     txid VARCHAR PRIMARY KEY,
@@ -35,8 +31,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     script_types VARCHAR[]
 );
 
-CREATE INDEX IF NOT EXISTS idx_tx_first_seen ON transactions (first_seen_ts);
-
 -- Transaction inputs
 CREATE TABLE IF NOT EXISTS tx_inputs (
     txid VARCHAR,
@@ -45,8 +39,6 @@ CREATE TABLE IF NOT EXISTS tx_inputs (
     amount BIGINT,
     PRIMARY KEY (txid, idx)
 );
-
-CREATE INDEX IF NOT EXISTS idx_inputs_addr ON tx_inputs (address);
 
 -- Transaction outputs
 CREATE TABLE IF NOT EXISTS tx_outputs (
@@ -57,8 +49,6 @@ CREATE TABLE IF NOT EXISTS tx_outputs (
     script_type VARCHAR,
     PRIMARY KEY (txid, idx)
 );
-
-CREATE INDEX IF NOT EXISTS idx_outputs_addr ON tx_outputs (address);
 
 -- Unique address registry
 CREATE TABLE IF NOT EXISTS addresses (
@@ -77,9 +67,6 @@ CREATE TABLE IF NOT EXISTS quarantine (
     error_details VARCHAR,
     ingested_at DOUBLE
 );
-
-CREATE INDEX IF NOT EXISTS idx_quarantine_reason ON quarantine (quarantine_reason);
-CREATE INDEX IF NOT EXISTS idx_quarantine_reason_code ON quarantine (reason_code);
 
 CREATE VIEW IF NOT EXISTS quarantined_observations AS
     SELECT obs_id, raw_data, reason_code, error_details, ingested_at FROM quarantine;
@@ -118,8 +105,6 @@ CREATE TABLE IF NOT EXISTS entities (
     created_at DOUBLE
 );
 
-CREATE INDEX IF NOT EXISTS idx_entities_type ON entities (entity_type);
-
 -- Address to Entity resolution mapping
 CREATE TABLE IF NOT EXISTS address_entity_map (
     address VARCHAR PRIMARY KEY,
@@ -127,8 +112,6 @@ CREATE TABLE IF NOT EXISTS address_entity_map (
     confidence DOUBLE,
     method VARCHAR
 );
-
-CREATE INDEX IF NOT EXISTS idx_aem_entity ON address_entity_map (entity_id);
 
 -- Heterogeneous graph edges
 CREATE TABLE IF NOT EXISTS graph_edges (
@@ -139,10 +122,6 @@ CREATE TABLE IF NOT EXISTS graph_edges (
     metadata_json VARCHAR
 );
 
-CREATE INDEX IF NOT EXISTS idx_edges_src ON graph_edges (source);
-CREATE INDEX IF NOT EXISTS idx_edges_tgt ON graph_edges (target);
-CREATE INDEX IF NOT EXISTS idx_edges_type ON graph_edges (edge_type);
-
 -- First-seen origin IP estimates per transaction
 CREATE TABLE IF NOT EXISTS tx_origins (
     txid VARCHAR PRIMARY KEY,
@@ -152,8 +131,6 @@ CREATE TABLE IF NOT EXISTS tx_origins (
     is_anonymizer BOOLEAN,
     sensor_count INTEGER
 );
-
-CREATE INDEX IF NOT EXISTS idx_tx_origins_ip ON tx_origins (origin_ip);
 
 -- Entity to IP attribution links (TF-IDF hub-debiased)
 CREATE TABLE IF NOT EXISTS ip_entity_links (
@@ -166,9 +143,6 @@ CREATE TABLE IF NOT EXISTS ip_entity_links (
     PRIMARY KEY (ip, entity_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_iel_entity ON ip_entity_links (entity_id);
-CREATE INDEX IF NOT EXISTS idx_iel_ip ON ip_entity_links (ip);
-
 -- Multi-cluster operator links via shared origin IPs
 CREATE TABLE IF NOT EXISTS shares_origin_links (
     entity_a VARCHAR,
@@ -178,9 +152,6 @@ CREATE TABLE IF NOT EXISTS shares_origin_links (
     p_value DOUBLE,
     PRIMARY KEY (entity_a, entity_b, shared_ip)
 );
-
-CREATE INDEX IF NOT EXISTS idx_sol_ea ON shares_origin_links (entity_a);
-CREATE INDEX IF NOT EXISTS idx_sol_eb ON shares_origin_links (entity_b);
 
 -- Behavioral network signatures per entity
 CREATE TABLE IF NOT EXISTS entity_network_signatures (
@@ -203,11 +174,6 @@ CREATE TABLE IF NOT EXISTS alerts (
     alert_json VARCHAR,
     created_at DOUBLE
 );
-
-CREATE INDEX IF NOT EXISTS idx_alerts_entity ON alerts (entity_id);
-CREATE INDEX IF NOT EXISTS idx_alerts_priority ON alerts (priority);
-CREATE INDEX IF NOT EXISTS idx_alerts_risk ON alerts (risk_score);
-CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status);
 
 -- Multimodal entity feature vectors
 CREATE TABLE IF NOT EXISTS entity_features (
@@ -235,9 +201,6 @@ CREATE TABLE IF NOT EXISTS taint_traces (
     created_at DOUBLE
 );
 
-CREATE INDEX IF NOT EXISTS idx_traces_root ON taint_traces (root_ref);
-CREATE INDEX IF NOT EXISTS idx_traces_direction ON taint_traces (direction);
-
 -- Autonomous investigative case files
 CREATE TABLE IF NOT EXISTS investigative_cases (
     case_id VARCHAR PRIMARY KEY,
@@ -247,9 +210,6 @@ CREATE TABLE IF NOT EXISTS investigative_cases (
     case_json VARCHAR,
     created_at DOUBLE
 );
-
-CREATE INDEX IF NOT EXISTS idx_cases_target ON investigative_cases (target_id);
-CREATE INDEX IF NOT EXISTS idx_cases_status ON investigative_cases (status);
 
 -- Analyst feedback loop for active learning
 CREATE TABLE IF NOT EXISTS alert_feedback (
@@ -261,9 +221,6 @@ CREATE TABLE IF NOT EXISTS alert_feedback (
     timestamp DOUBLE
 );
 
-CREATE INDEX IF NOT EXISTS idx_af_alert ON alert_feedback (alert_id);
-CREATE INDEX IF NOT EXISTS idx_af_entity ON alert_feedback (entity_id);
-
 -- Case investigation timeline audit events
 CREATE TABLE IF NOT EXISTS case_timeline_events (
     event_id VARCHAR PRIMARY KEY,
@@ -273,8 +230,4 @@ CREATE TABLE IF NOT EXISTS case_timeline_events (
     details_json VARCHAR,
     timestamp DOUBLE
 );
-
-CREATE INDEX IF NOT EXISTS idx_cte_case ON case_timeline_events (case_id);
 """
-
-

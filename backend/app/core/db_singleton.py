@@ -29,4 +29,17 @@ def get_db(db_path: str | Path | None = None) -> DatabaseManager:
 
 def reset_db_singleton() -> None:
     """Clear cached singleton (primarily used for test suite isolation)."""
-    get_db.cache_clear()
+    close_db()
+
+
+def close_db() -> None:
+    """Close the cached database connection if open and clear cache."""
+    try:
+        info = get_db.cache_info()
+        if info.currsize > 0:
+            db_inst = get_db()
+            db_inst.close()
+    except Exception as exc:
+        logger.warning("Error closing db singleton: %s", exc)
+    finally:
+        get_db.cache_clear()

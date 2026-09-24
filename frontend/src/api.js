@@ -82,7 +82,17 @@ export const api = {
     }),
 
   // Graph & Entity Explorer
-  getEntities: (limit = 100) => request(`/graph/entities?limit=${limit}`),
+  getEntities: (params = 100) => {
+    if (typeof params === 'number') {
+      return request(`/graph/entities?limit=${params}`);
+    }
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set('limit', params.limit);
+    if (params.offset !== undefined) query.set('offset', params.offset);
+    if (params.entity_type) query.set('entity_type', params.entity_type);
+    if (params.search) query.set('search', params.search);
+    return request(`/graph/entities?${query.toString()}`);
+  },
   getEntityDetail: (entityId) => request(`/graph/entities/${encodeURIComponent(entityId)}`),
   getEgoSubgraph: (centerId, hops = 2) =>
     request(`/graph/subgraph?center_id=${encodeURIComponent(centerId)}&hops=${hops}`),
@@ -122,6 +132,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(event),
     }),
+  exportCaseHtml: async (caseId) => {
+    const url = `${API_BASE}/trace/cases/${encodeURIComponent(caseId)}/export/html`;
+    const headers = {};
+    if (API_KEY) headers['X-API-Key'] = API_KEY;
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`Export HTML failed: ${res.statusText}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, '_blank');
+  },
+  exportCaseCsv: async (caseId) => {
+    const url = `${API_BASE}/trace/cases/${encodeURIComponent(caseId)}/export/csv`;
+    const headers = {};
+    if (API_KEY) headers['X-API-Key'] = API_KEY;
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`Export CSV failed: ${res.statusText}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `${caseId}_hops.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+  },
 
   // AI/ML Model Lab
   getModelLab: () => request('/models/lab'),

@@ -10,6 +10,7 @@ import {
   UploadCloud,
   Shield,
   LayoutDashboard,
+  HelpCircle,
 } from 'lucide-react';
 import { ChainSentinelLogo } from '../visuals/icons';
 import { AnimatedNumber } from '../shared';
@@ -34,6 +35,8 @@ export default function CommandBar({
   riskScore = null,
   health = null,
   onAlertBellClick,
+  onOpenPalette,
+  onOpenShortcuts,
 }) {
   const isOnline = health?.status === 'ok';
 
@@ -54,15 +57,40 @@ export default function CommandBar({
       </div>
 
       {/* Global Search */}
-      <div className="command-bar-search">
+      <div
+        className="command-bar-search"
+        onClick={() => onOpenPalette && onOpenPalette()}
+        style={{ cursor: 'pointer' }}
+      >
         <Search size={14} className="search-icon" />
         <input
           id="global-search-input"
           type="text"
-          placeholder="Search entities, alerts, addresses\u2026"
+          placeholder="Search entities, alerts, addresses… (Ctrl+K)"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
         />
+        <kbd
+          className="mono"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onOpenPalette) onOpenPalette();
+          }}
+          title="Open Command Palette (Cmd/Ctrl+K)"
+          style={{
+            fontSize: '0.64rem',
+            padding: '1px 5px',
+            borderRadius: '3px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            marginLeft: 'auto',
+          }}
+        >
+          ⌘K
+        </kbd>
       </div>
 
       {/* Mode Switcher */}
@@ -126,6 +154,16 @@ export default function CommandBar({
             {isOnline ? 'LIVE' : 'OFFLINE'}
           </span>
         </div>
+
+        <button
+          className="alert-bell-btn"
+          id="help-shortcuts-btn"
+          onClick={onOpenShortcuts}
+          title="Keyboard Shortcuts (?)"
+          style={{ marginRight: '0.25rem' }}
+        >
+          <HelpCircle size={16} />
+        </button>
 
         <button
           className="alert-bell-btn"

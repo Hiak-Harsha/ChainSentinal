@@ -10,19 +10,6 @@ vi.mock('../api', () => ({
   },
 }));
 
-// Mock framer-motion with dynamic proxy so motion.div, motion.svg, motion.path all render
-vi.mock('framer-motion', () => {
-  const handler = {
-    get: (target, prop) => {
-      return ({ children, ...props }) => React.createElement(prop, props, children);
-    },
-  };
-  return {
-    motion: new Proxy({}, handler),
-    AnimatePresence: ({ children }) => <>{children}</>,
-  };
-});
-
 const renderWithToast = (ui) => render(<ToastProvider>{ui}</ToastProvider>);
 
 describe('AlertCenterView Component (List-Only Overlay)', () => {

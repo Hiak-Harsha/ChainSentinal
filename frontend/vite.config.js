@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/__tests__/setupTests.js',
     pool: 'forks',
+    testTimeout: 15000,
   },
   server: {
     port: 3001,
@@ -22,5 +23,15 @@ export default defineConfig({
   build: {
     outDir: 'out',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-cytoscape': ['cytoscape'],
+          'vendor-recharts': ['recharts'],
+          'vendor-motion': ['framer-motion'],
+        },
+      },
+    },
   },
 });

@@ -34,9 +34,8 @@ TEST_XML = "data/samples/observations.xml"
 def ensure_sample_data():
     csv_p = Path(TEST_CSV)
     if not csv_p.exists() or csv_p.stat().st_size == 0:
-        from chainsentinel.gen.generator import Generator
-        gen = Generator(target_txs=10, seed=42)
-        gen.run(output_dir=str(csv_p.parent), formats=["csv", "json", "xml"])
+        from chainsentinel.gen.generator import run_generator
+        run_generator(tx_count=50, seed=42, output_dir=str(csv_p.parent), formats=["csv", "json", "xml"])
 
 
 class TestMultiFormatIngestion:

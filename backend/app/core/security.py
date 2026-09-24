@@ -6,11 +6,12 @@ import secrets
 from pathlib import Path
 
 from fastapi import Depends, HTTPException, Security
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, APIKeyQuery
 
 from app.core.config import settings
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_api_key_query = APIKeyQuery(name="api_key", auto_error=False)
 
 
 def _ensure_api_key() -> str:
@@ -48,10 +49,17 @@ def _ensure_api_key() -> str:
 
 
 async def verify_api_key(
-    api_key: str | None = Security(_api_key_header),
+    api_key_header: str | None = Security(_api_key_header),
+    api_key_query: str | None = Security(_api_key_query),
 ) -> str:
-    """FastAPI dependency that validates the X-API-Key header."""
+    """FastAPI dependency that validates the X-API-Key header or api_key query parameter.
+    
+    Query parameter authentication is permitted to support direct browser tab navigation
+    and export downloads (e.g. window.open('/api/trace/cases/{id}/export/html?api_key=...'))
+    where custom HTTP headers cannot be supplied by native browser window navigation.
+    """
     expected = _ensure_api_key()
+    api_key = api_key_header or api_key_query
     if not api_key or not secrets.compare_digest(api_key, expected):
         raise HTTPException(
             status_code=401,

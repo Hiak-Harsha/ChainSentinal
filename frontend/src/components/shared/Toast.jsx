@@ -32,6 +32,7 @@ export function ToastProvider({ children }) {
   }, []);
 
   const toast = {
+    showToast: (msg, type = 'info') => addToast(msg, type),
     error: (msg) => addToast(msg, 'error'),
     success: (msg) => addToast(msg, 'success'),
     info: (msg) => addToast(msg, 'info'),

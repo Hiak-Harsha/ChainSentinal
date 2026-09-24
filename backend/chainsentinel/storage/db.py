@@ -400,18 +400,23 @@ class DatabaseManager:
         limit: int = 50,
         offset: int = 0,
         entity_type: str | None = None,
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List entities ordered by member_count DESC, total_received_sat DESC."""
+        """List entities ordered by member_count DESC, total_received_sat DESC with optional search."""
+        where_clauses = []
+        params = []
         if entity_type:
-            cursor = self.conn.execute(
-                "SELECT * FROM entities WHERE entity_type = ? ORDER BY member_count DESC, total_received_sat DESC LIMIT ? OFFSET ?",
-                [entity_type, limit, offset],
-            )
-        else:
-            cursor = self.conn.execute(
-                "SELECT * FROM entities ORDER BY member_count DESC, total_received_sat DESC LIMIT ? OFFSET ?",
-                [limit, offset],
-            )
+            where_clauses.append("entity_type = ?")
+            params.append(entity_type)
+        if search:
+            where_clauses.append("(entity_id ILIKE ? OR entity_type ILIKE ?)")
+            params.append(f"%{search}%")
+            params.append(f"%{search}%")
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        query = f"SELECT * FROM entities {where_sql} ORDER BY member_count DESC, total_received_sat DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        cursor = self.conn.execute(query, params)
         cols = [desc[0] for desc in cursor.description]
         return [dict(zip(cols, r)) for r in cursor.fetchall()]
 
