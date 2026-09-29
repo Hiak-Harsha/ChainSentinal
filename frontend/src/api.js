@@ -5,10 +5,18 @@
 
 const API_BASE = '/api';
 
-// Read API key from Vite env (build-time injection) or fallback for dev
-const API_KEY = typeof import.meta !== 'undefined' && import.meta.env
-  ? import.meta.env.VITE_CS_API_KEY || ''
-  : '';
+// Read API key from localStorage, window global, or Vite env
+export function getApiKey() {
+  if (typeof window !== 'undefined' && window.__CS_API_KEY__) return window.__CS_API_KEY__;
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem('chainsentinel_api_key');
+    if (stored) return stored;
+  }
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CS_API_KEY) {
+    return import.meta.env.VITE_CS_API_KEY;
+  }
+  return '';
+}
 
 /**
  * Format error details cleanly for operator presentation.
@@ -38,8 +46,9 @@ async function request(endpoint, options = {}) {
   };
 
   // Attach API key to all requests except health
-  if (API_KEY && !endpoint.startsWith('/health')) {
-    headers['X-API-Key'] = API_KEY;
+  const apiKey = getApiKey();
+  if (apiKey && !endpoint.startsWith('/health')) {
+    headers['X-API-Key'] = apiKey;
   }
 
   const config = {
@@ -179,8 +188,8 @@ export const api = {
     }),
   exportCaseHtml: async (caseId) => {
     const url = `${API_BASE}/trace/cases/${encodeURIComponent(caseId)}/export/html`;
-    const headers = {};
-    if (API_KEY) headers['X-API-Key'] = API_KEY;
+    const apiKey = getApiKey();
+    if (apiKey) headers['X-API-Key'] = apiKey;
     const res = await fetch(url, { headers });
     if (!res.ok) throw new Error(`Export HTML failed: ${res.statusText}`);
     const blob = await res.blob();
@@ -189,8 +198,8 @@ export const api = {
   },
   exportCaseCsv: async (caseId) => {
     const url = `${API_BASE}/trace/cases/${encodeURIComponent(caseId)}/export/csv`;
-    const headers = {};
-    if (API_KEY) headers['X-API-Key'] = API_KEY;
+    const apiKey = getApiKey();
+    if (apiKey) headers['X-API-Key'] = apiKey;
     const res = await fetch(url, { headers });
     if (!res.ok) throw new Error(`Export CSV failed: ${res.statusText}`);
     const blob = await res.blob();
@@ -260,7 +269,7 @@ export const api = {
       method: 'POST',
       body: form,
       signal: options.signal,
-      ...(API_KEY ? { headers: { 'X-API-Key': API_KEY } } : {}),
+      ...(getApiKey() ? { headers: { 'X-API-Key': getApiKey() } } : {}),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -276,7 +285,7 @@ export const api = {
       method: 'POST',
       body: form,
       signal: options.signal,
-      ...(API_KEY ? { headers: { 'X-API-Key': API_KEY } } : {}),
+      ...(getApiKey() ? { headers: { 'X-API-Key': getApiKey() } } : {}),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
