@@ -26,13 +26,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
-COPY backend/pyproject.toml backend/
+# Copy backend application source and install Python dependencies
+COPY backend/ /app/backend/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir ./backend
 
-# Copy application backend source
-COPY backend/ /app/backend/
+# Copy supporting assets and data
 COPY eval/ /app/eval/
 COPY data/ /app/data/
 COPY scripts/ /app/scripts/

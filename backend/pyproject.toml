@@ -59,6 +59,9 @@ dev = [
 [project.scripts]
 chainsentinel = "chainsentinel.cli:cli"
 
+[tool.hatch.build.targets.wheel]
+packages = ["chainsentinel", "app"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
