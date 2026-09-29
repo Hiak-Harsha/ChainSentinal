@@ -1,0 +1,53 @@
+[
+  {
+    "alert_id": "ALT-2026-FIXTURE-01",
+    "entity_id": "ENT_DARK_MARKET",
+    "risk_score": 0.94,
+    "priority": 0.94,
+    "status": "NEW",
+    "typology": "T2_COINJOIN",
+    "typologies": [
+      { "name": "CoinJoin Mixer", "score": 0.94, "strength": 0.94 }
+    ],
+    "confidence": {
+      "grade": "A",
+      "p_value": 0.008,
+      "prediction_set_size": 1
+    },
+    "attribution": {
+      "ip": "36.0.228.184",
+      "country": "CN",
+      "asn": "AS4134"
+    },
+    "explanation": [
+      { "feature": "degree_out", "contribution": 0.42 },
+      { "feature": "peel_velocity", "contribution": 0.28 },
+      { "feature": "equal_output_ratio", "contribution": 0.24 }
+    ]
+  },
+  {
+    "alert_id": "ALT-2026-FIXTURE-02",
+    "entity_id": "ENT_HOP_1",
+    "risk_score": 0.65,
+    "priority": 0.65,
+    "status": "INVESTIGATING",
+    "typology": "T1_PEEL_CHAIN",
+    "typologies": [
+      { "name": "Peel Chain", "score": 0.65, "strength": 0.65 }
+    ],
+    "confidence": {
+      "grade": "B",
+      "p_value": 0.042,
+      "prediction_set_size": 2
+    },
+    "attribution": {
+      "ip": "86.128.51.231",
+      "country": "GB",
+      "asn": "AS2856"
+    },
+    "explanation": [
+      { "feature": "peel_chain_length", "contribution": 0.35 },
+      { "feature": "rapid_sweep_flag", "contribution": 0.30 }
+    ]
+  }
+]

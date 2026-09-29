@@ -4,8 +4,22 @@ import {
   Search,
   Filter,
   Sliders,
+  ShieldAlert,
+  Flame,
+  CheckCircle,
+  Eye,
 } from 'lucide-react';
-import { CopyHash, RiskGauge, StatusBadge } from './shared';
+import {
+  PageHeader,
+  PageToolbar,
+  SectionCard,
+  MetricCard,
+  DataTable,
+  CopyHash,
+  RiskGauge,
+  StatusBadge,
+  ActionGroup,
+} from './shared';
 import { getTypologyIcon } from './visuals/icons';
 import { RadarEmptyState } from './visuals/RadarEmptyState';
 
@@ -27,23 +41,227 @@ export default function AlertCenterView({
       a.alert_id?.toLowerCase().includes(q) ||
       a.entity_id?.toLowerCase().includes(q) ||
       a.attribution?.ip?.toLowerCase().includes(q) ||
+      a.typology?.toLowerCase().includes(q) ||
       a.typologies?.some((t) => t.name.toLowerCase().includes(q));
 
     const matchesStatus = statusFilter === 'ALL' || a.status === statusFilter;
-    const matchesGrade = gradeFilter === 'ALL' || a.confidence?.grade === gradeFilter;
+    const matchesGrade =
+      gradeFilter === 'ALL' || a.confidence?.grade === gradeFilter;
     const priority = a.priority ?? a.risk_score ?? null;
     const matchesRisk = priority !== null ? priority >= minRisk : minRisk === 0;
 
     return matchesSearch && matchesStatus && matchesGrade && matchesRisk;
   });
 
+  // Calculate alert overview telemetry
+  const criticalCount = alerts.filter(
+    (a) => (a.priority ?? a.risk_score ?? 0) >= 0.7
+  ).length;
+  const gradeACount = alerts.filter((a) => a.confidence?.grade === 'A').length;
+  const newCount = alerts.filter((a) => (a.status || 'NEW') === 'NEW').length;
+  const resolvedCount = alerts.filter(
+    (a) => a.status === 'RESOLVED' || a.status === 'CLOSED_FALSE_POSITIVE'
+  ).length;
+
+  const alertColumns = [
+    {
+      header: 'Risk Score',
+      key: 'priority',
+      width: '120px',
+      cell: (row) => {
+        const priority = row.priority ?? row.risk_score ?? 0;
+        return (
+          <RiskGauge
+            score={priority}
+            variant="bar"
+            size="sm"
+            showLabel={false}
+          />
+        );
+      },
+    },
+    {
+      header: 'Alert ID',
+      key: 'alert_id',
+      sortable: true,
+      cell: (row) => (
+        <CopyHash value={row.alert_id} label="Alert ID" truncateLength={5} />
+      ),
+    },
+    {
+      header: 'Entity Target',
+      key: 'entity_id',
+      cell: (row) => (
+        <CopyHash
+          value={row.entity_id}
+          label="Entity Target"
+          truncateLength={6}
+        />
+      ),
+    },
+    {
+      header: 'Detected Typology',
+      key: 'typology',
+      cell: (row) => {
+        const topTyp =
+          row.typologies?.[0]?.name || row.typology || 'UNKNOWN';
+        const topStr = row.typologies?.[0]?.strength ?? row.typologies?.[0]?.score ?? 0;
+        return (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+            }}
+          >
+            <div
+              style={{
+                padding: 'var(--space-1)',
+                borderRadius: '4px',
+                background: 'rgba(255, 255, 255, 0.04)',
+                display: 'flex',
+              }}
+            >
+              {getTypologyIcon(topTyp, { size: 18 })}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span
+                style={{
+                  fontWeight: 600,
+                  color: 'var(--text-emphasis)',
+                }}
+              >
+                {topTyp.replace('T_', '').replace(/_/g, ' ')}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                P = {(topStr * 100).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Conformal Grade',
+      key: 'grade',
+      width: '90px',
+      cell: (row) => {
+        const grade = row.confidence?.grade || 'B';
+        return (
+          <StatusBadge
+            status={grade}
+            size="sm"
+            showDot={false}
+            className="font-bold"
+          />
+        );
+      },
+    },
+    {
+      header: 'Attributed Origin IP',
+      key: 'ip',
+      cell: (row) => {
+        const ip = row.attribution?.ip || 'N/A';
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span
+              className="mono"
+              style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}
+            >
+              {ip}
+            </span>
+            {row.attribution?.country && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                {row.attribution.country} &bull; {row.attribution.asn}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Status',
+      key: 'status',
+      width: '100px',
+      cell: (row) => <StatusBadge status={row.status || 'NEW'} size="sm" />,
+    },
+    {
+      header: 'Action',
+      key: 'action',
+      width: '110px',
+      cell: (row) => (
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onSelectAlert) onSelectAlert(row);
+          }}
+        >
+          Deep Dive
+        </button>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
-      {/* Search & Filter Toolbar */}
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1.25rem',
+      }}
+    >
+      {/* Page Header */}
+      <PageHeader
+        icon={AlertTriangle}
+        title="Ranked Investigative Leads & Forensic Detection Alerts"
+        subtitle="Autonomous graph neural network, typological rule inference, TreeSHAP explainability, and analyst triage queue."
+      />
+
+      {/* KPI Cards */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '1rem',
+        }}
+      >
+        <MetricCard
+          label="Active Leads"
+          value={alerts.length}
+          icon={AlertTriangle}
+          accentColor="var(--btc-orange)"
+          helper="Total detected leads in queue"
+        />
+        <MetricCard
+          label="Critical Risk (≥ 70%)"
+          value={criticalCount}
+          icon={Flame}
+          accentColor="var(--crimson)"
+          helper="Urgent priority requiring immediate triage"
+        />
+        <MetricCard
+          label="High Confidence (Grade A)"
+          value={gradeACount}
+          icon={ShieldAlert}
+          accentColor="var(--emerald)"
+          helper="Conformal coverage singleton predictions"
+        />
+        <MetricCard
+          label="Pending Triage (New)"
+          value={newCount}
+          icon={Eye}
+          accentColor="var(--color-primary)"
+          helper="Unreviewed anomalous transactions"
+        />
+      </div>
+
+      {/* Search & Filter Controls Toolbar */}
       <div
         className="card"
         style={{
-          marginBottom: '1rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -52,7 +270,15 @@ export default function AlertCenterView({
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: '280px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            flex: 1,
+            minWidth: '280px',
+          }}
+        >
           <div style={{ position: 'relative', flex: 1 }}>
             <Search
               size={16}
@@ -60,7 +286,7 @@ export default function AlertCenterView({
                 position: 'absolute',
                 left: '0.75rem',
                 top: '50%',
-                transform: 'translateY(-50%)',
+                transform: 'translateY(-50)',
                 color: 'var(--text-dim)',
               }}
             />
@@ -75,8 +301,23 @@ export default function AlertCenterView({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              fontSize: '0.82rem',
+              color: 'var(--text-muted)',
+            }}
+          >
             <Filter size={15} />
             <span>Status:</span>
             <select
@@ -93,7 +334,15 @@ export default function AlertCenterView({
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              fontSize: '0.82rem',
+              color: 'var(--text-muted)',
+            }}
+          >
             <Sliders size={15} />
             <span>Grade:</span>
             <select
@@ -108,7 +357,15 @@ export default function AlertCenterView({
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              fontSize: '0.82rem',
+              color: 'var(--text-muted)',
+            }}
+          >
             <span>Min Risk:</span>
             <select
               className="select"
@@ -123,129 +380,32 @@ export default function AlertCenterView({
         </div>
       </div>
 
-      {/* Alerts Table (Full Width, List-Only) */}
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-title">
-              <AlertTriangle size={18} style={{ color: 'var(--amber)' }} />
-              Ranked Investigative Leads ({filteredAlerts.length})
-            </div>
-            <div className="card-subtitle">
-              Section 7 NTRO Compliance &bull; Select any row to inspect SHAP rationale in the Inspector Panel
-            </div>
+      {/* Alerts Table Section Card */}
+      <SectionCard
+        icon={AlertTriangle}
+        iconColor="var(--amber)"
+        title={`Ranked Investigative Leads (${filteredAlerts.length})`}
+        subtitle="Select any row to inspect SHAP rationale, topology graph, and attribution in the Inspector Panel."
+      >
+        {filteredAlerts.length === 0 ? (
+          <div style={{ padding: '2rem 1rem' }}>
+            <RadarEmptyState
+              title="FORENSIC RADAR ACTIVE"
+              subtitle="No anomalous transaction patterns detected matching current filter criteria."
+            />
           </div>
-        </div>
-
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: '130px' }}>Risk Score</th>
-                <th>Alert ID</th>
-                <th>Entity Target</th>
-                <th>Detected Typology</th>
-                <th>Conformal Grade</th>
-                <th>Attributed Origin IP</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAlerts.length === 0 ? (
-                <tr>
-                  <td colSpan="8" style={{ padding: 'var(--space-6) var(--space-4)' }}>
-                    <RadarEmptyState
-                      title="FORENSIC RADAR ACTIVE"
-                      subtitle="No anomalous transaction patterns detected matching current filter criteria."
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filteredAlerts.map((a) => {
-                  const priority = a.priority ?? a.risk_score ?? 0;
-                  const topTyp = a.typologies?.[0]?.name || 'UNKNOWN';
-                  const topStr = a.typologies?.[0]?.strength ?? 0;
-                  const grade = a.confidence?.grade || 'B';
-                  const ip = a.attribution?.ip || 'N/A';
-                  const status = a.status || 'NEW';
-                  const isSelected = selectedAlert?.alert_id === a.alert_id;
-
-                  return (
-                    <tr
-                      key={a.alert_id}
-                      onClick={() => onSelectAlert && onSelectAlert(a)}
-                      style={{
-                        cursor: 'pointer',
-                        background: isSelected ? 'var(--bg-elevated)' : undefined,
-                      }}
-                    >
-                      <td>
-                        <RiskGauge score={priority} variant="bar" size="sm" showLabel={false} />
-                      </td>
-                      <td>
-                        <CopyHash value={a.alert_id} label="Alert ID" truncateLength={5} />
-                      </td>
-                      <td>
-                        <CopyHash value={a.entity_id} label="Entity Target" truncateLength={6} />
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                          <div style={{ padding: 'var(--space-1)', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', display: 'flex' }}>
-                            {getTypologyIcon(topTyp, { size: 18 })}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600, color: 'var(--text-emphasis)' }}>
-                              {topTyp.replace('T_', '').replace(/_/g, ' ')}
-                            </span>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                              P = {(topStr * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <StatusBadge
-                          status={grade}
-                          size="sm"
-                          showDot={false}
-                          className="font-bold"
-                        />
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>
-                            {ip}
-                          </span>
-                          {a.attribution?.country && (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                              {a.attribution.country} &bull; {a.attribution.asn}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <StatusBadge status={status} size="sm" />
-                      </td>
-                      <td>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onSelectAlert) onSelectAlert(a);
-                          }}
-                        >
-                          Deep Dive
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        ) : (
+          <DataTable
+            columns={alertColumns}
+            data={filteredAlerts}
+            keyExtractor={(row) => row.alert_id}
+            rowKey={(row) => row.alert_id}
+            onRowClick={(row) => onSelectAlert && onSelectAlert(row)}
+            selectedRowKey={selectedAlert?.alert_id}
+            pageSize={15}
+          />
+        )}
+      </SectionCard>
     </div>
   );
 }

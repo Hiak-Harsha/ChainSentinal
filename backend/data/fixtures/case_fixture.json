@@ -1,0 +1,55 @@
+{
+  "case_id": "CASE-2026-FIXTURE-01",
+  "target_id": "ENT_DARK_MARKET",
+  "title": "Operation Cerberus - Darknet Capital Flow",
+  "status": "SEALED",
+  "created_at": 1704120973.0,
+  "risk_score": 0.94,
+  "entities": [
+    "ENT_DARK_MARKET",
+    "ENT_HOP_1",
+    "ENT_HOP_2",
+    "ENT_EXCHANGE_EXIT"
+  ],
+  "timeline": [
+    {
+      "event_id": "evt_fix_01",
+      "case_id": "CASE-2026-FIXTURE-01",
+      "event_type": "INITIAL_DISCOVERY",
+      "target_id": "ENT_DARK_MARKET",
+      "timestamp": 1704120973.0,
+      "details": {
+        "note": "Entity flagged by CoinJoin heuristic detector",
+        "analyst": "Automated Engine"
+      }
+    },
+    {
+      "event_id": "evt_fix_02",
+      "case_id": "CASE-2026-FIXTURE-01",
+      "event_type": "SUBPOENA_FILED",
+      "target_id": "ENT_EXCHANGE_EXIT",
+      "timestamp": 1704124573.0,
+      "details": {
+        "note": "LE notice served to compliant clearinghouse",
+        "analyst": "Forensic Officer #412"
+      }
+    },
+    {
+      "event_id": "evt_fix_03",
+      "case_id": "CASE-2026-FIXTURE-01",
+      "event_type": "SEALED",
+      "target_id": "ENT_DARK_MARKET",
+      "timestamp": 1704130000.0,
+      "details": {
+        "note": "Cryptographic seal generated with SHA-256 integrity hash",
+        "analyst": "Supervisory Agent"
+      }
+    }
+  ],
+  "evidence": {
+    "total_laundered_btc": 5.0,
+    "hops_count": 3,
+    "terminal_offramp": "ENT_EXCHANGE_EXIT",
+    "defensible_audit_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

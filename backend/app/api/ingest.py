@@ -341,3 +341,14 @@ async def stream_progress(job_id: str) -> EventSourceResponse:
                 yield {"event": "ping", "data": "keep-alive"}
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/quarantine")
+async def list_quarantine_records(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    reason_code: str | None = Query(None, description="Filter by reason code"),
+) -> list[dict[str, Any]]:
+    """List quarantined invalid observations with error rationale and details."""
+    db = _get_db()
+    return db.list_quarantine(limit=limit, offset=offset, reason_code=reason_code)

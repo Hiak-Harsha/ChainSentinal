@@ -1,395 +1,408 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
+  ShieldAlert,
   Users,
   AlertTriangle,
-  Coins,
-  Radio,
   Play,
-  ArrowRight,
-  ShieldCheck,
-  ShieldAlert,
-  Flame,
   Search,
+  UploadCloud,
+  FileText,
+  Activity,
+  CheckCircle2,
+  Database,
+  Layers,
+  ArrowRight,
+  Clock,
+  Flame,
+  ShieldCheck,
 } from 'lucide-react';
-import { AnimatedNumber, CopyHash, Skeleton, StatusBadge } from './shared';
-import { BTCCoinIcon, getTypologyIcon } from './visuals/icons';
-import { MiniTransactionFlow } from './visuals/MiniTransactionFlow';
+import {
+  MetricCard,
+  SectionCard,
+  StatusBadge,
+  CopyHash,
+  DataTable,
+  EmptyState,
+} from './shared';
+import { BTCCoinIcon } from './visuals/icons';
 
 export default function OverviewView({
   metrics,
   alerts = [],
+  health,
   onSelectAlert,
   onSwitchTab,
   onTriggerDetect,
   detecting = false,
+  onRefresh,
 }) {
-  const topAlerts = alerts.slice(0, 6);
-
-  // Compute summary stats from alerts and metrics
-  const totalEntities = metrics?.entity_count ?? metrics?.total_entities ?? null;
+  const isHealthy = health?.status === 'ok' || health?.status === 'healthy';
+  const totalEntities = metrics?.total_entities ?? metrics?.entity_count ?? null;
   const totalEdges = metrics?.total_edges ?? null;
-  const trackedVolumeBtc = metrics?.total_volume_btc ?? (totalEdges !== null ? ((Number(totalEdges) * 0.428).toFixed(2)) : '1,842.50');
-  const criticalCount = alerts.filter((a) => {
-    const r = a.risk_score ?? a.composite_risk ?? a.priority;
-    return r !== undefined && r >= 0.7;
-  }).length;
+  const totalTransactions = metrics?.total_transactions ?? null;
+  const totalAddresses = metrics?.total_addresses ?? null;
+  const totalQuarantined = metrics?.total_quarantined ?? 0;
+  const totalVolumeBtc = metrics?.total_volume_btc ?? (typeof metrics?.total_volume_sat === 'number' ? (metrics.total_volume_sat / 1e8).toFixed(4) : null);
+  const meanRisk = metrics?.mean_risk_score ?? null;
+  const highRiskCount = metrics?.high_risk_alerts ?? alerts.filter((a) => (a.priority ?? a.risk_score ?? 0) >= 0.7).length;
+
+  const recentJobs = metrics?.recent_jobs || [];
+  const recentCases = metrics?.recent_cases || [];
+
+  const topAlerts = alerts
+    .filter((a) => a.status === 'NEW' || a.status === 'INVESTIGATING' || !a.status)
+    .slice(0, 5);
 
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.08,
-      },
+      transition: { staggerChildren: 0.06 },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 12 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+    hidden: { opacity: 0, y: 10 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
   };
 
+  const alertColumns = [
+    {
+      header: 'Alert ID',
+      key: 'alert_id',
+      render: (val) => <CopyHash hash={val} truncate={12} />,
+    },
+    {
+      header: 'Target Entity',
+      key: 'entity_id',
+      render: (val) => (
+        <span className="mono" style={{ color: 'var(--text-emphasis)', fontWeight: 600 }}>
+          {val ? `${val.slice(0, 14)}…` : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'Risk Score',
+      key: 'risk_score',
+      render: (val, row) => {
+        const score = val ?? row.priority ?? 0;
+        const color = score >= 0.7 ? 'var(--crimson)' : score >= 0.4 ? 'var(--amber)' : 'var(--emerald)';
+        return (
+          <span className="mono font-bold" style={{ color }}>
+            {(score * 100).toFixed(0)}%
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Confidence Grade',
+      key: 'confidence',
+      render: (conf) => {
+        const grade = conf?.grade || 'B';
+        return <span className={`badge badge-grade-${grade.toLowerCase()}`}>Grade {grade}</span>;
+      },
+    },
+    {
+      header: 'Status',
+      key: 'status',
+      render: (val) => <StatusBadge status={val || 'NEW'} />,
+    },
+    {
+      header: 'Action',
+      key: 'action',
+      align: 'right',
+      render: (_, row) => (
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectAlert?.(row);
+          }}
+        >
+          Investigate <ArrowRight size={12} />
+        </button>
+      ),
+    },
+  ];
+
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show">
-      {/* Top Banner with Quick Actions */}
+    <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* 1. Threat Center Situational Banner */}
       <motion.div
         variants={itemVariants}
         className="card"
         style={{
-          marginBottom: '1.5rem',
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.3) 100%)',
-          border: '1px solid rgba(0, 240, 255, 0.3)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.37)',
+          background: 'linear-gradient(135deg, rgba(20, 24, 36, 0.95) 0%, rgba(35, 25, 15, 0.8) 100%)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <Flame size={24} style={{ color: 'var(--amber)' }} />
-              Forensic Situational Threat Center
-            </h2>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-              Active AI intelligence monitoring Bitcoin transaction traffic, mempool broadcasts, and entity topologies.
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-emphasis)', margin: 0 }}>
+                Forensic Operations Threat Center
+              </h1>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  background: isHealthy ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                  color: isHealthy ? '#10b981' : '#f43f5e',
+                  border: `1px solid ${isHealthy ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)'}`,
+                }}
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: isHealthy ? '#10b981' : '#f43f5e',
+                  }}
+                />
+                {isHealthy ? 'BACKEND ONLINE' : 'TELEMETRY DISCONNECTED'}
+              </span>
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.3rem', lineHeight: 1.4 }}>
+              Deterministic Bitcoin forensic ledger &bull; Continuous entity topology resolution &bull; Inductive conformal risk scoring.
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {/* Core Action Group */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
             <button
               id="btn-quick-detect"
               className="btn btn-primary"
               onClick={onTriggerDetect}
               disabled={detecting}
             >
-              <Play size={16} />
-              {detecting ? 'Analyzing Telemetry...' : 'Trigger Detection Engine'}
+              <Play size={15} />
+              {detecting ? 'Running Inference…' : 'Run Detection Engine'}
             </button>
             <button
               className="btn btn-secondary"
-              onClick={() => onSwitchTab('graph')}
+              onClick={() => onSwitchTab?.('graph')}
             >
-              <Search size={16} />
-              Explore Link Graph
+              <Search size={15} /> Explore Network
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onSwitchTab?.('ingest')}
+            >
+              <UploadCloud size={15} /> Ingest Data
             </button>
           </div>
         </div>
       </motion.div>
 
-      {/* KPI Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
-        <motion.div variants={itemVariants} className="card kpi-card cyan">
-          <div className="kpi-top">
-            <span>Clustered Entities</span>
-            <div className="kpi-icon-wrap" style={{ color: 'var(--text-main)' }}>
-              <Users size={20} />
-            </div>
-          </div>
-          <div className="kpi-value mono" style={{ color: 'var(--text-emphasis)' }}>
-            {totalEntities !== null ? (
-              <AnimatedNumber value={totalEntities} />
-            ) : (
-              <Skeleton width="110px" height="2rem" />
-            )}
-          </div>
-          <div className="kpi-meta">
-            CIOH + CoinJoin Anti-Collapse Clustered
-          </div>
-        </motion.div>
+      {/* 2. Scaled Telemetry KPI Cards */}
+      <motion.div
+        variants={itemVariants}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          gap: '1rem',
+        }}
+      >
+        <MetricCard
+          label="RESOLVED ENTITIES"
+          numericValue={totalEntities}
+          variant="cyan"
+          icon={Users}
+          meta="CIOH + CoinJoin clustered entities"
+          onClick={() => onSwitchTab?.('graph')}
+        />
 
-        <motion.div variants={itemVariants} className="card kpi-card crimson">
-          <div className="kpi-top">
-            <span>High-Risk Alerts</span>
-            <div className="kpi-icon-wrap" style={{ color: 'var(--crimson)' }}>
-              <AlertTriangle size={20} />
-            </div>
-          </div>
-          <div className="kpi-value mono" style={{ color: 'var(--crimson)' }}>
-            <AnimatedNumber value={criticalCount} />
-          </div>
-          <div className="kpi-meta">
-            {alerts.length} Total Ranked Leads (Risk &ge; 0.35)
-          </div>
-        </motion.div>
+        <MetricCard
+          label="HIGH-RISK LEADS"
+          numericValue={highRiskCount}
+          variant="crimson"
+          icon={AlertTriangle}
+          meta={`${alerts.length} total active ranked leads`}
+          onClick={() => onSwitchTab?.('alerts')}
+        />
 
-        <motion.div variants={itemVariants} className="card kpi-card btc">
-          <div className="kpi-top">
-            <span>Tracked Volume</span>
-            <div className="kpi-icon-wrap btc">
-              <BTCCoinIcon size={20} />
-            </div>
-          </div>
-          <div className="kpi-value mono" style={{ color: 'var(--btc-orange)' }}>
-            {trackedVolumeBtc} <span style={{ fontSize: '1rem', color: 'var(--text-dim)' }}>BTC</span>
-          </div>
-          <div className="kpi-meta">
-            Decomposed UTXO Flows Under Watch
-          </div>
-        </motion.div>
+        <MetricCard
+          label="TRACKED VOLUME"
+          value={totalVolumeBtc !== null ? `${totalVolumeBtc} BTC` : '—'}
+          variant="btc"
+          icon={BTCCoinIcon}
+          meta={typeof metrics?.total_volume_sat === 'number' ? `${metrics.total_volume_sat.toLocaleString()} satoshis` : 'Aggregated UTXO flow'}
+        />
 
-        <motion.div variants={itemVariants} className="card kpi-card emerald">
-          <div className="kpi-top">
-            <span>Graph Connections</span>
-            <div className="kpi-icon-wrap" style={{ color: 'var(--emerald)' }}>
-              <Coins size={20} />
-            </div>
-          </div>
-          <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
-            {totalEdges !== null ? (
-              <AnimatedNumber value={totalEdges} />
-            ) : (
-              <Skeleton width="90px" height="2rem" />
-            )}
-          </div>
-          <div className="kpi-meta">
-            Transfers, Spends, &amp; Shared Origin Links
-          </div>
-        </motion.div>
+        <MetricCard
+          label="QUARANTINE QUEUE"
+          numericValue={totalQuarantined}
+          variant={totalQuarantined > 0 ? 'amber' : 'emerald'}
+          icon={ShieldAlert}
+          meta={totalQuarantined > 0 ? 'Invalid records awaiting inspection' : 'Zero validation violations'}
+          onClick={() => onSwitchTab?.('ingest')}
+        />
 
-        <motion.div variants={itemVariants} className="card kpi-card purple">
-          <div className="kpi-top">
-            <span>Operator IP Attribution</span>
-            <div className="kpi-icon-wrap" style={{ color: 'var(--btc-gold)' }}>
-              <Radio size={20} />
-            </div>
-          </div>
-          <div className="kpi-value mono" style={{ color: 'var(--btc-gold)' }}>
-            TF-IDF + MC
-          </div>
-          <div className="kpi-meta">
-            Hub De-Biased, Permutation p &le; 0.05
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Interactive UTXO Forensic Decomposition Flow */}
-      <motion.div variants={itemVariants} style={{ marginBottom: '1.5rem' }}>
-        <MiniTransactionFlow />
+        <MetricCard
+          label="MEAN ENTITY RISK"
+          numericValue={meanRisk !== null ? meanRisk * 100 : null}
+          decimals={1}
+          suffix="%"
+          variant="purple"
+          icon={Activity}
+          meta="Network-wide Bayesian risk average"
+        />
       </motion.div>
 
-      {/* Main Grid: Priority Alert Stream + Quick Investigation */}
-      <div className="grid-2">
-        {/* Left: Priority Threat Leads */}
-        <motion.div variants={itemVariants} className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">
-                <ShieldAlert size={18} style={{ color: 'var(--crimson)' }} />
-                Priority Investigative Alerts
-              </div>
-              <div className="card-subtitle">
-                Section 7 NTRO Contract Compliant Ranked Leads
-              </div>
-            </div>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => onSwitchTab('alerts')}
-            >
-              View All ({alerts.length})
-              <ArrowRight size={14} />
+      {/* 3. High-Priority Action Table */}
+      <motion.div variants={itemVariants}>
+        <SectionCard
+          icon={ShieldAlert}
+          iconColor="var(--crimson)"
+          title="Requires Analyst Attention: Unresolved High-Risk Leads"
+          subtitle="Top unaddressed forensic leads ranked by Bayesian composite risk score"
+          actions={
+            <button className="btn btn-secondary btn-sm" onClick={() => onSwitchTab?.('alerts')}>
+              View All Alerts ({alerts.length}) <ArrowRight size={13} />
             </button>
-          </div>
+          }
+        >
+          <DataTable
+            columns={alertColumns}
+            data={topAlerts}
+            onRowClick={(row) => onSelectAlert?.(row)}
+            emptyTitle="No Critical Alerts Pending"
+            emptyDescription="All identified threats have been triaged or no high-risk transactions detected."
+            pagination={false}
+          />
+        </SectionCard>
+      </motion.div>
 
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Priority</th>
-                  <th>Entity</th>
-                  <th>Typology</th>
-                  <th>Grade</th>
-                  <th>Attributed IP</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topAlerts.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>
-                      No alerts triggered yet. Click "Trigger Detection Engine" to scan transaction graphs.
-                    </td>
-                  </tr>
-                ) : (
-                  topAlerts.map((a) => {
-                    const topTyp = a.typologies?.[0]?.name || 'UNKNOWN';
-                    const grade = a.confidence?.grade || 'B';
-                    const ip = a.attribution?.ip || 'N/A';
-                    const priority = a.priority ?? a.risk_score;
-                    return (
-                      <tr key={a.alert_id}>
-                        <td>
-                          <span
-                            className={`badge ${
-                              priority > 0.7
-                                ? 'badge-crimson'
-                                : priority > 0.4
-                                ? 'badge-amber'
-                                : 'badge-emerald'
-                            }`}
-                          >
-                            {(priority * 100).toFixed(0)}%
-                          </span>
-                        </td>
-                        <td>
-                          <CopyHash value={a.entity_id} label="Entity ID" truncateLength={6} />
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                            {getTypologyIcon(topTyp, { size: 16 })}
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-emphasis)' }}>
-                              {topTyp.replace('T_', '').replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <StatusBadge status={grade} size="sm" showDot={false} />
-                        </td>
-                        <td>
-                          <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            {ip}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => onSelectAlert(a)}
-                          >
-                            Examine
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-
-        {/* Right: Forensic Platform Posture & Architecture */}
-        <motion.div variants={itemVariants} className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">
-                <ShieldCheck size={18} style={{ color: 'var(--emerald)' }} />
-                Forensic Operational Readiness
-              </div>
-              <div className="card-subtitle">
-                Multi-layer offline intelligence verification
-              </div>
+      {/* 4. Recent Forensic Operations Grid */}
+      <motion.div
+        variants={itemVariants}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
+          gap: '1.25rem',
+        }}
+      >
+        {/* Left: Recent Ingestion Jobs */}
+        <SectionCard
+          icon={UploadCloud}
+          iconColor="var(--btc-orange)"
+          title="Recent Ingestion Runs"
+          subtitle="Data quality auditing and pipeline ingest history"
+          actions={
+            <button className="btn btn-secondary btn-sm" onClick={() => onSwitchTab?.('ingest')}>
+              Ingestion Wizard <ArrowRight size={13} />
+            </button>
+          }
+        >
+          {recentJobs.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {recentJobs.map((job) => (
+                <div
+                  key={job.job_id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.6rem 0.8rem',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.78rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <span className="badge badge-emerald mono" style={{ textTransform: 'uppercase' }}>
+                      {job.format || 'CSV'}
+                    </span>
+                    <div>
+                      <div className="mono font-semibold" style={{ color: 'var(--text-main)' }}>
+                        {job.job_id}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Valid: <strong className="text-emerald">{job.valid_rows?.toLocaleString() ?? 0}</strong> &bull; Quarantined: <strong className="text-crimson">{job.quarantined_rows?.toLocaleString() ?? 0}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <StatusBadge status={job.status} size="sm" />
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <EmptyState
+              icon={UploadCloud}
+              title="No Ingestion Runs Recorded"
+              description="Upload a CSV, JSON, or XML dataset to begin automated quality validation."
+              action={
+                <button className="btn btn-secondary btn-sm" onClick={() => onSwitchTab?.('ingest')}>
+                  Upload Dataset
+                </button>
+              }
+            />
+          )}
+        </SectionCard>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-            <div
-              style={{
-                padding: '1rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                  CIOH Entity Clustering Heuristic
+        {/* Right: Recent Cases & Entity Topologies */}
+        <SectionCard
+          icon={FileText}
+          iconColor="var(--emerald)"
+          title="Recent Investigation Dossiers"
+          subtitle="Court-admissible sealed cases and active evidentiary files"
+          actions={
+            <button className="btn btn-secondary btn-sm" onClick={() => onSwitchTab?.('cases')}>
+              All Cases <ArrowRight size={13} />
+            </button>
+          }
+        >
+          {recentCases.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {recentCases.map((c) => (
+                <div
+                  key={c.case_id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.6rem 0.8rem',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.78rem',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                      {c.title || c.case_id}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                      Target: <span className="mono">{c.target_id?.slice(0, 14)}…</span>
+                    </div>
+                  </div>
+                  <StatusBadge status={c.status || 'NEW'} size="sm" />
                 </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                  Union-Find with path compression &amp; CoinJoin anti-collapse isolation.
-                </div>
-              </div>
-              <span className="badge badge-emerald">Verified (NMI=0.78)</span>
+              ))}
             </div>
-
-            <div
-              style={{
-                padding: '1rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                  Network⇄Blockchain Correlation
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                  TF-IDF hub de-biasing + Monte Carlo permutation test (p &le; 0.05).
-                </div>
-              </div>
-              <span className="badge badge-emerald">Active</span>
-            </div>
-
-            <div
-              style={{
-                padding: '1rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                  Explainable AI &amp; Conformal Guarantees
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                  TreeSHAP feature attributions + 90% guaranteed coverage prediction sets.
-                </div>
-              </div>
-              <span className="badge badge-cyan">Grades A/B/C</span>
-            </div>
-
-            <div
-              style={{
-                padding: '1rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                  Autonomous Multi-Model Tracing &amp; Pathfinding
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                  Proportional haircut, FIFO, Poison, and widest bottleneck Dijkstra.
-                </div>
-              </div>
-              <span className="badge badge-emerald">Operational</span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
+          ) : (
+            <EmptyState
+              icon={FileText}
+              title="No Investigation Dossiers Open"
+              description="Generate an autonomous forensic dossier from any suspicious entity in the Network Canvas."
+              action={
+                <button className="btn btn-secondary btn-sm" onClick={() => onSwitchTab?.('graph')}>
+                  Select Entity
+                </button>
+              }
+            />
+          )}
+        </SectionCard>
+      </motion.div>
     </motion.div>
   );
 }

@@ -11,6 +11,7 @@ import {
   GitMerge,
 } from 'lucide-react';
 import { api } from '../api';
+import { ErrorState } from './shared';
 import { RadarEmptyState } from './visuals/RadarEmptyState';
 import ClusteringVisualizer from './process/ClusteringVisualizer';
 
@@ -27,11 +28,15 @@ export default function NetworkCanvas({
 }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const clusterIntervalRef = useRef(null);
+  const clusterTimeoutRef = useRef(null);
 
   const [inputCenterId, setInputCenterId] = useState(centerId || '');
   const [currentHops, setCurrentHops] = useState(hops);
   const [layoutName, setLayoutName] = useState('cose');
   const [loading, setLoading] = useState(false);
+  const [graphError, setGraphError] = useState(null);
   const [entitiesList, setEntitiesList] = useState([]);
   const [hasData, setHasData] = useState(false);
 
@@ -41,6 +46,30 @@ export default function NetworkCanvas({
   const [clusterStage, setClusterStage] = useState('Idle');
   const [clusterEvents, setClusterEvents] = useState([]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (clusterIntervalRef.current) clearInterval(clusterIntervalRef.current);
+      if (clusterTimeoutRef.current) clearTimeout(clusterTimeoutRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      if (cyRef.current) {
+        try { cyRef.current.destroy(); } catch (e) {}
+      }
+    };
+  }, []);
+
+  // Resize Cytoscape when returning to the network tab
+  useEffect(() => {
+    if (!hidden && cyRef.current) {
+      setTimeout(() => {
+        try {
+          cyRef.current.resize();
+          cyRef.current.fit(undefined, 30);
+        } catch (e) {}
+      }, 50);
+    }
+  }, [hidden]);
+
   const handleRunCluster = async () => {
     setClustering(true);
     setClusterProgress(0.15);
@@ -48,6 +77,8 @@ export default function NetworkCanvas({
     setClusterEvents([
       { stage: 'Scan', merged: 'Extracting multi-input UTXO transactions' },
     ]);
+
+    if (clusterIntervalRef.current) clearInterval(clusterIntervalRef.current);
 
     try {
       const res = await api.startJob('/graph/cluster', { async_mode: true });
@@ -59,37 +90,40 @@ export default function NetworkCanvas({
           ...prev,
         ]);
 
-        const interval = setInterval(async () => {
+        clusterIntervalRef.current = setInterval(async () => {
           try {
             const status = await api.getJobStatus(res.job_id);
             if (status.status === 'completed') {
-              clearInterval(interval);
+              clearInterval(clusterIntervalRef.current);
+              clusterIntervalRef.current = null;
               setClusterProgress(1.0);
               setClusterStage('CoinJoin Check & Finalize');
               setClusterEvents((prev) => [
                 { stage: 'Resolved', merged: `${status.result?.merged_entities ?? 'Multiple'} entities reconciled` },
                 ...prev,
               ]);
-              setTimeout(() => {
+              clusterTimeoutRef.current = setTimeout(() => {
                 setClustering(false);
                 loadGraph(inputCenterId, currentHops);
               }, 2200);
             } else if (status.status === 'failed') {
-              clearInterval(interval);
+              clearInterval(clusterIntervalRef.current);
+              clusterIntervalRef.current = null;
               setClustering(false);
             } else if (status.events && status.events.length > 0) {
               setClusterEvents(status.events);
               setClusterProgress((prev) => Math.min(0.9, prev + 0.15));
             }
           } catch (e) {
-            clearInterval(interval);
+            clearInterval(clusterIntervalRef.current);
+            clusterIntervalRef.current = null;
             setClustering(false);
           }
         }, 700);
       } else {
         setClusterProgress(1.0);
         setClusterStage('Complete');
-        setTimeout(() => {
+        clusterTimeoutRef.current = setTimeout(() => {
           setClustering(false);
           loadGraph(inputCenterId, currentHops);
         }, 1500);
@@ -138,10 +172,18 @@ export default function NetworkCanvas({
   // Fetch subgraph and render in Cytoscape
   const loadGraph = async (targetId, hopCount = currentHops) => {
     if (!targetId || !containerRef.current) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
+    setGraphError(null);
 
     try {
-      const data = await api.getEgoSubgraph(targetId, hopCount);
+      const data = await api.getEgoSubgraph(targetId, hopCount, { signal: controller.signal });
       const elements = [];
 
       (data.nodes || []).forEach((n) => {
@@ -307,9 +349,16 @@ export default function NetworkCanvas({
 
       cyRef.current = cy;
     } catch (err) {
+      if (err.name === 'AbortError') {
+        return; // Request canceled by a newer entity selection
+      }
       console.error('Failed to load subgraph:', err);
+      setGraphError(err.message || 'Failed to retrieve entity graph');
+      setHasData(false);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -486,9 +535,30 @@ export default function NetworkCanvas({
             height: '100%',
           }}
         />
+        {/* Error state if graph retrieval failed */}
+        {graphError && !loading && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--bg-base)',
+              zIndex: 10,
+              padding: '1.5rem',
+            }}
+          >
+            <ErrorState
+              title="Failed to Load Network Subgraph"
+              message={graphError}
+              onRetry={() => loadGraph(inputCenterId, currentHops)}
+            />
+          </div>
+        )}
 
         {/* Empty state if no data */}
-        {!hasData && !loading && (
+        {!hasData && !loading && !graphError && (
           <div
             style={{
               position: 'absolute',

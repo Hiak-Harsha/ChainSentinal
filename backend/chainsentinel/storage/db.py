@@ -970,6 +970,133 @@ class DatabaseManager:
                 counts[t] = 0
         return counts
 
+    def get_system_overview(self) -> dict[str, Any]:
+        """Compute comprehensive, non-fake forensic dataset overview telemetry."""
+        counts = self.get_counts()
+        
+        # Volume
+        try:
+            vol_res = self.conn.execute("SELECT COALESCE(SUM(total_in), 0) FROM transactions").fetchone()
+            total_vol_sat = int(vol_res[0]) if vol_res and vol_res[0] is not None else 0
+        except Exception:
+            total_vol_sat = 0
+
+        # High-risk alerts
+        try:
+            hra_res = self.conn.execute(
+                "SELECT COUNT(*) FROM alerts WHERE priority >= 0.7 OR risk_score >= 0.7"
+            ).fetchone()
+            high_risk_alerts = int(hra_res[0]) if hra_res else 0
+        except Exception:
+            high_risk_alerts = 0
+
+        # Mean risk score
+        try:
+            mrs_res = self.conn.execute(
+                "SELECT COALESCE(AVG(risk_score), 0.0) FROM entities WHERE risk_score IS NOT NULL"
+            ).fetchone()
+            mean_risk_score = float(mrs_res[0]) if mrs_res and mrs_res[0] is not None else 0.0
+        except Exception:
+            mean_risk_score = 0.0
+
+        # Entity type distribution
+        entity_types = {}
+        try:
+            et_cursor = self.conn.execute(
+                "SELECT entity_type, COUNT(*) FROM entities GROUP BY entity_type ORDER BY COUNT(*) DESC"
+            )
+            for row in et_cursor.fetchall():
+                entity_types[str(row[0])] = int(row[1])
+        except Exception:
+            pass
+
+        # Recent alerts
+        recent_alerts = []
+        try:
+            ra_cursor = self.conn.execute(
+                "SELECT alert_id, entity_id, priority, risk_score, status, created_at FROM alerts ORDER BY created_at DESC LIMIT 5"
+            )
+            cols = [desc[0] for desc in ra_cursor.description]
+            for r in ra_cursor.fetchall():
+                recent_alerts.append(dict(zip(cols, r)))
+        except Exception:
+            pass
+
+        # Recent ingest jobs
+        recent_jobs = []
+        try:
+            rj_cursor = self.conn.execute(
+                "SELECT job_id, format, status, total_rows, valid_rows, quarantined_rows, started_at, completed_at FROM ingest_jobs ORDER BY started_at DESC LIMIT 5"
+            )
+            cols = [desc[0] for desc in rj_cursor.description]
+            for r in rj_cursor.fetchall():
+                recent_jobs.append(dict(zip(cols, r)))
+        except Exception:
+            pass
+
+        # Recent cases
+        recent_cases = []
+        try:
+            rc_cursor = self.conn.execute(
+                "SELECT case_id, target_id, title, status, created_at FROM investigative_cases ORDER BY created_at DESC LIMIT 5"
+            )
+            cols = [desc[0] for desc in rc_cursor.description]
+            for r in rc_cursor.fetchall():
+                recent_cases.append(dict(zip(cols, r)))
+        except Exception:
+            pass
+
+        return {
+            "status": "online",
+            "total_entities": counts.get("entities", 0),
+            "entity_count": counts.get("entities", 0),
+            "total_edges": counts.get("graph_edges", 0),
+            "total_transactions": counts.get("transactions", 0),
+            "total_addresses": counts.get("addresses", 0),
+            "total_observations": counts.get("observations", 0),
+            "total_quarantined": counts.get("quarantine", 0),
+            "total_volume_sat": total_vol_sat,
+            "total_volume_btc": round(total_vol_sat / 1e8, 4),
+            "total_alerts": counts.get("alerts", 0),
+            "high_risk_alerts": high_risk_alerts,
+            "mean_risk_score": round(mean_risk_score, 4),
+            "entity_types": entity_types,
+            "recent_alerts": recent_alerts,
+            "recent_jobs": recent_jobs,
+            "recent_cases": recent_cases,
+            "table_counts": counts,
+        }
+
+    def list_quarantine(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        reason_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List quarantined invalid observations with error rationale."""
+        where_sql = ""
+        params: list[Any] = []
+        if reason_code:
+            where_sql = "WHERE reason_code = ? OR quarantine_reason = ?"
+            params.extend([reason_code, reason_code])
+        params.extend([limit, offset])
+
+        cursor = self.conn.execute(
+            f"SELECT obs_id, raw_data, quarantine_reason, reason_code, error_details, ingested_at FROM quarantine {where_sql} ORDER BY ingested_at DESC LIMIT ? OFFSET ?",
+            params,
+        )
+        cols = [desc[0] for desc in cursor.description]
+        records = []
+        for r in cursor.fetchall():
+            row_dict = dict(zip(cols, r))
+            if isinstance(row_dict.get("raw_data"), str):
+                try:
+                    row_dict["parsed_raw"] = json.loads(row_dict["raw_data"])
+                except Exception:
+                    row_dict["parsed_raw"] = row_dict["raw_data"]
+            records.append(row_dict)
+        return records
+
     def record_alert_feedback(
         self,
         feedback_id: str,

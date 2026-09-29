@@ -153,11 +153,18 @@ def get_subgraph(
     return db.get_ego_subgraph(center_id=center_id, hops=hops, max_edges=max_edges)
 
 
+@router.get("/stats")
+def get_graph_stats() -> dict[str, Any]:
+    """Retrieve comprehensive topological overview, entity counts, volumes, and recent activity."""
+    db = get_db()
+    return db.get_system_overview()
+
+
 @router.get("/metrics")
 def get_evaluation_metrics(
     dataset_name: str | None = Query(None, description="Server-registered dataset name"),
 ) -> dict[str, Any]:
-    """Compute clustering accuracy (ARI, NMI, Precision, Recall) against ground truth."""
+    """Compute clustering accuracy (ARI, NMI, Precision, Recall) against ground truth or return graph overview."""
     db = get_db()
 
     # Resolve server-side only — no raw filesystem paths accepted
@@ -178,9 +185,17 @@ def get_evaluation_metrics(
                 break
 
     if not gt_file or not gt_file.exists():
-        raise HTTPException(status_code=404, detail="Ground truth file not found")
+        if dataset_name:
+            raise HTTPException(status_code=404, detail="Ground truth file not found")
+        overview = db.get_system_overview()
+        overview["evaluation_available"] = False
+        return overview
 
     gt_map = ClusterEvaluator.load_ground_truth_map(gt_file)
     res = db.conn.execute("SELECT address, entity_id FROM address_entity_map").fetchall()
     disc_map = dict(res)
-    return ClusterEvaluator.evaluate(disc_map, gt_map)
+    eval_res = ClusterEvaluator.evaluate(disc_map, gt_map)
+    overview = db.get_system_overview()
+    overview.update(eval_res)
+    overview["evaluation_available"] = True
+    return overview

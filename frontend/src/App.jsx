@@ -112,6 +112,7 @@ function AppContent() {
   const [prefilledTarget, setPrefilledTarget] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   const toast = useToast();
   const wsRef = useRef(null);
@@ -144,6 +145,7 @@ function AppContent() {
     if (nextMode) setMode(nextMode);
     if (nextSelection !== undefined) {
       setSelection(nextSelection);
+      if (nextSelection) setInspectorOpen(true);
 
       // Track recent entities
       if (nextSelection?.type === 'entity' && nextSelection?.id) {
@@ -180,15 +182,16 @@ function AppContent() {
         return;
       }
 
-      // Quick-switch modes with numeric keys 1-6
-      if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+      // Quick-switch modes with numeric keys 1-7
+      if (['1', '2', '3', '4', '5', '6', '7'].includes(e.key)) {
         const modeMap = {
           '1': 'overview',
           '2': 'network',
           '3': 'alerts',
           '4': 'taint',
-          '5': 'models',
-          '6': 'ingest',
+          '5': 'cases',
+          '6': 'models',
+          '7': 'ingest',
         };
         const next = modeMap[e.key];
         if (next) {
@@ -400,6 +403,8 @@ function AppContent() {
         entityCount={metrics?.total_entities}
         riskScore={metrics?.mean_risk_score ?? null}
         health={health}
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={() => setInspectorOpen((prev) => !prev)}
         onAlertBellClick={() => pivotTo({ mode: 'alerts' })}
         onOpenPalette={() => setIsPaletteOpen(true)}
         onOpenShortcuts={() => setIsPaletteOpen(true)}
@@ -518,6 +523,8 @@ function AppContent() {
         <InspectorPanel
           selection={selection}
           onClearSelection={() => setSelection(null)}
+          isOpen={inspectorOpen}
+          onClose={() => setInspectorOpen(false)}
           entityDetail={entityDetail}
           similarEntities={similarEntities}
           alertDetail={alertDetail}

@@ -11,6 +11,8 @@ import {
   Shield,
   LayoutDashboard,
   HelpCircle,
+  FolderOpen,
+  PanelRight,
 } from 'lucide-react';
 import { ChainSentinelLogo } from '../visuals/icons';
 import { AnimatedNumber } from '../shared';
@@ -21,6 +23,7 @@ const MODES = [
   { id: 'network', label: 'Network', icon: Network },
   { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
   { id: 'taint', label: 'Taint', icon: GitBranch },
+  { id: 'cases', label: 'Cases', icon: FolderOpen },
   { id: 'models', label: 'Models', icon: Cpu },
   { id: 'ingest', label: 'Ingest', icon: UploadCloud },
 ];
@@ -34,6 +37,8 @@ export default function CommandBar({
   entityCount = 0,
   riskScore = null,
   health = null,
+  inspectorOpen = false,
+  onToggleInspector,
   onAlertBellClick,
   onOpenPalette,
   onOpenShortcuts,
@@ -183,6 +188,22 @@ export default function CommandBar({
             </motion.span>
           )}
         </button>
+
+        {onToggleInspector && (
+          <button
+            className={`alert-bell-btn ${inspectorOpen ? 'active' : ''}`}
+            id="inspector-toggle-btn"
+            onClick={onToggleInspector}
+            title={inspectorOpen ? 'Collapse Inspector Panel' : 'Expand Inspector Panel'}
+            style={{
+              marginLeft: '0.25rem',
+              color: inspectorOpen ? 'var(--btc-orange)' : 'var(--text-muted)',
+              border: inspectorOpen ? '1px solid rgba(247, 147, 26, 0.4)' : undefined,
+            }}
+          >
+            <PanelRight size={18} />
+          </button>
+        )}
       </div>
     </div>
   );

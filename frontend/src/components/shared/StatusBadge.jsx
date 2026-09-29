@@ -15,12 +15,14 @@ const STATUS_CONFIGS = {
   CLOSED_FALSE_POSITIVE: { label: 'FALSE POSITIVE', bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.25)', text: '#94a3b8', dot: '#64748b' },
   RESOLVED: { label: 'RESOLVED', bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981', dot: '#10b981' },
   
-  // Severities
-  CRITICAL: { label: 'CRITICAL', bg: 'rgba(244, 63, 94, 0.18)', border: 'rgba(244, 63, 94, 0.45)', text: '#f43f5e', dot: '#f43f5e' },
-  HIGH: { label: 'HIGH', bg: 'rgba(249, 115, 22, 0.15)', border: 'rgba(249, 115, 22, 0.35)', text: '#f97316', dot: '#f97316' },
-  MEDIUM: { label: 'MEDIUM', bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.3)', text: '#fbbf24', dot: '#fbbf24' },
-  LOW: { label: 'LOW', bg: 'rgba(56, 189, 248, 0.1)', border: 'rgba(56, 189, 248, 0.25)', text: '#38bdf8', dot: '#38bdf8' },
-  INFO: { label: 'INFO', bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.25)', text: '#94a3b8', dot: '#94a3b8' },
+  // Forensic Quality & Job Statuses
+  PASS: { label: 'PASS', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)', text: '#10b981', dot: '#10b981' },
+  WARNING: { label: 'WARNING', bg: 'rgba(251, 191, 36, 0.15)', border: 'rgba(251, 191, 36, 0.4)', text: '#fbbf24', dot: '#fbbf24' },
+  QUARANTINED: { label: 'QUARANTINED', bg: 'rgba(249, 115, 22, 0.18)', border: 'rgba(249, 115, 22, 0.45)', text: '#f97316', dot: '#f97316' },
+  FAILED: { label: 'FAILED', bg: 'rgba(244, 63, 94, 0.18)', border: 'rgba(244, 63, 94, 0.45)', text: '#f43f5e', dot: '#f43f5e' },
+  COMPLETED: { label: 'COMPLETED', bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981', dot: '#10b981' },
+  RUNNING: { label: 'RUNNING', bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.4)', text: '#38bdf8', dot: '#38bdf8' },
+  QUEUED: { label: 'QUEUED', bg: 'rgba(148, 163, 184, 0.12)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8', dot: '#94a3b8' },
 };
 
 export default function StatusBadge({ status, size = 'sm', showDot = true, className = '' }) {

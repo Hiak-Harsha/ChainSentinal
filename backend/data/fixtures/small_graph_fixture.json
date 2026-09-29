@@ -1,0 +1,14 @@
+{
+  "graph_id": "graph_fixture_canonical_01",
+  "nodes": [
+    { "id": "ENT_DARK_MARKET", "label": "Hydra Liquidation Hub", "type": "MIXER", "risk_score": 0.94, "cluster_size": 42 },
+    { "id": "ENT_HOP_1", "label": "Intermediate Peel Node", "type": "WALLET", "risk_score": 0.65, "cluster_size": 8 },
+    { "id": "ENT_HOP_2", "label": "Consolidation Cluster", "type": "SERVICE", "risk_score": 0.42, "cluster_size": 15 },
+    { "id": "ENT_EXCHANGE_EXIT", "label": "Regulated Offramp", "type": "EXCHANGE", "risk_score": 0.12, "cluster_size": 1200 }
+  ],
+  "edges": [
+    { "source": "ENT_DARK_MARKET", "target": "ENT_HOP_1", "amount_sat": 500000000, "txid": "49445bd82d65229b60fbb5d322d6446116232295cb601410ea2534174dfa2a4b", "taint_ratio": 0.95 },
+    { "source": "ENT_HOP_1", "target": "ENT_HOP_2", "amount_sat": 450000000, "txid": "7fbf480eb70cd8cd1289a2124429e33f776e8784756bf69a0d6f1d0ca5168550", "taint_ratio": 0.82 },
+    { "source": "ENT_HOP_2", "target": "ENT_EXCHANGE_EXIT", "amount_sat": 400000000, "txid": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0", "taint_ratio": 0.58 }
+  ]
+}

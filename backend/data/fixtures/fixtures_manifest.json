@@ -1,0 +1,83 @@
+{
+  "version": "1.0.0",
+  "generated_at": 1704120973.0,
+  "description": "ChainSentinel Forensic Formal Test Fixture Suite across all ingestion, graph, trace, alert, and case lifecycles",
+  "fixtures": {
+    "A_clean": {
+      "path": "backend/data/fixtures/clean_observations.jsonl",
+      "format": "jsonl",
+      "input_rows": 5,
+      "expected_valid": 5,
+      "expected_quarantined": 0,
+      "expected_reasons": []
+    },
+    "B_malformed": {
+      "path": "backend/data/fixtures/malformed_observations.jsonl",
+      "format": "jsonl",
+      "input_rows": 5,
+      "expected_valid": 0,
+      "expected_quarantined": 5,
+      "expected_reasons": [
+        "INVALID_IP",
+        "INVALID_TXID",
+        "NEGATIVE_OR_ZERO_AMOUNT",
+        "EMPTY_INPUTS_OR_OUTPUTS",
+        "AMOUNT_MISMATCH"
+      ]
+    },
+    "C_duplicate": {
+      "path": "backend/data/fixtures/duplicate_observations.jsonl",
+      "format": "jsonl",
+      "input_rows": 4,
+      "unique_records": 2,
+      "expected_duplicate_count": 2
+    },
+    "D_quarantine": {
+      "path": "backend/data/fixtures/quarantine_observations.jsonl",
+      "format": "jsonl",
+      "input_rows": 5,
+      "expected_quarantined": 5,
+      "expected_reasons": [
+        "INVALID_TXID",
+        "AMOUNT_MISMATCH",
+        "INVALID_IP",
+        "TIMESTAMP_ANOMALY",
+        "NEGATIVE_OR_ZERO_AMOUNT"
+      ]
+    },
+    "E_mixed": {
+      "path": "backend/data/fixtures/mixed_observations.jsonl",
+      "format": "jsonl",
+      "input_rows": 20,
+      "expected_valid": 18,
+      "expected_quarantined": 2,
+      "expected_reasons": [
+        "INVALID_TXID",
+        "AMOUNT_MISMATCH"
+      ]
+    },
+    "F_graph": {
+      "path": "backend/data/fixtures/small_graph_fixture.json",
+      "expected_node_count": 4,
+      "expected_edge_count": 3,
+      "entity_types": ["MIXER", "WALLET", "SERVICE", "EXCHANGE"]
+    },
+    "G_trace": {
+      "path": "backend/data/fixtures/trace_path_fixture.json",
+      "expected_hops": 3,
+      "terminal_stop_reason": "STOPPED_AT_EXCHANGE",
+      "origin": "ENT_DARK_MARKET"
+    },
+    "H_alerts": {
+      "path": "backend/data/fixtures/alert_fixture.json",
+      "expected_alerts": 2,
+      "expected_grades": ["A", "B"]
+    },
+    "I_case": {
+      "path": "backend/data/fixtures/case_fixture.json",
+      "expected_case_id": "CASE-2026-FIXTURE-01",
+      "expected_timeline_events": 3,
+      "status": "SEALED"
+    }
+  }
+}

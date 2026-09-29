@@ -1,0 +1,47 @@
+{
+  "trace_id": "trace_fixture_001",
+  "origin": "ENT_DARK_MARKET",
+  "direction": "FORWARD",
+  "decay_model": "proportional",
+  "max_hops": 4,
+  "min_taint_threshold": 0.05,
+  "hops": [
+    {
+      "hop": 1,
+      "source": "ENT_DARK_MARKET",
+      "target": "ENT_HOP_1",
+      "amount_sat": 500000000,
+      "taint_ratio": 0.95,
+      "decay_factor": 0.95,
+      "stop_reason": null,
+      "txid": "49445bd82d65229b60fbb5d322d6446116232295cb601410ea2534174dfa2a4b"
+    },
+    {
+      "hop": 2,
+      "source": "ENT_HOP_1",
+      "target": "ENT_HOP_2",
+      "amount_sat": 450000000,
+      "taint_ratio": 0.82,
+      "decay_factor": 0.86,
+      "stop_reason": null,
+      "txid": "7fbf480eb70cd8cd1289a2124429e33f776e8784756bf69a0d6f1d0ca5168550"
+    },
+    {
+      "hop": 3,
+      "source": "ENT_HOP_2",
+      "target": "ENT_EXCHANGE_EXIT",
+      "amount_sat": 400000000,
+      "taint_ratio": 0.58,
+      "decay_factor": 0.71,
+      "stop_reason": "STOPPED_AT_EXCHANGE",
+      "txid": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
+    }
+  ],
+  "path_summary": {
+    "total_inflow_sat": 500000000,
+    "terminal_taint_sat": 232000000,
+    "effective_decay_loss_sat": 268000000,
+    "terminal_entity": "ENT_EXCHANGE_EXIT",
+    "terminal_entity_type": "EXCHANGE"
+  }
+}

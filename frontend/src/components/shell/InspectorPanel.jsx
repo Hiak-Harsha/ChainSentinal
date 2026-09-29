@@ -31,6 +31,8 @@ function truncateId(id, maxLen = 18) {
 export default function InspectorPanel({
   selection,
   onClearSelection,
+  isOpen = false,
+  onClose,
   // Entity data
   entityDetail,
   similarEntities,
@@ -45,9 +47,14 @@ export default function InspectorPanel({
   onLaunchTrace,
   onInvestigate,
 }) {
+  const handleClose = () => {
+    if (onClose) onClose();
+    if (onClearSelection) onClearSelection();
+  };
+
   if (!selection) {
     return (
-      <aside className="inspector-panel" id="inspector-panel">
+      <aside className={`inspector-panel ${isOpen ? 'open' : ''}`} id="inspector-panel">
         <div className="inspector-empty">
           <Shield size={48} style={{ color: 'var(--text-dim)', opacity: 0.3 }} />
           <div style={{ fontWeight: 600 }}>No Selection</div>
@@ -60,7 +67,7 @@ export default function InspectorPanel({
   }
 
   return (
-    <aside className="inspector-panel" id="inspector-panel">
+    <aside className={`inspector-panel ${isOpen ? 'open' : ''}`} id="inspector-panel">
       <AnimatePresence mode="wait">
         <motion.div
           key={`${selection.type}-${selection.id}`}
@@ -80,7 +87,7 @@ export default function InspectorPanel({
               <span style={{ textTransform: 'capitalize' }}>{selection.type}</span>
               <CopyHash hash={selection.id} truncate={14} />
             </h3>
-            <button className="inspector-close-btn" onClick={onClearSelection} title="Clear selection">
+            <button className="inspector-close-btn" onClick={handleClose} title="Clear selection">
               <X size={16} />
             </button>
           </div>
