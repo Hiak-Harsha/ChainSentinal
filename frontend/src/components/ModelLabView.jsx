@@ -146,11 +146,12 @@ export default function ModelLabView({ onTriggerDetect }) {
       />
 
 
-      {/* KPI Row: Supervised Accuracy, F1, Conformal Coverage */}
+      {/* KPI Row: Supervised Accuracy, F1/Precision/Recall, Conformal Coverage, Holdout Catch */}
       <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
         <div className="card kpi-card cyan">
           <div className="kpi-top">
             <span>Typology Accuracy</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>ACTUAL</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--btc-orange)' }}>
             {supervisedMetrics?.accuracy !== undefined ? (
@@ -169,6 +170,7 @@ export default function ModelLabView({ onTriggerDetect }) {
         <div className="card kpi-card emerald">
           <div className="kpi-top">
             <span>F1 Macro Score</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>ACTUAL</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--emerald)' }}>
             {supervisedMetrics?.f1_macro !== undefined ? (
@@ -179,31 +181,40 @@ export default function ModelLabView({ onTriggerDetect }) {
               '—'
             )}
           </div>
-          <div className="kpi-meta">
-            Balanced across T1–T9 Typologies
+          <div className="kpi-meta" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem' }}>
+            <span>P: {supervisedMetrics?.precision_macro !== undefined ? `${(supervisedMetrics.precision_macro * 100).toFixed(1)}%` : '—'}</span>
+            <span>R: {supervisedMetrics?.recall_macro !== undefined ? `${(supervisedMetrics.recall_macro * 100).toFixed(1)}%` : '—'}</span>
           </div>
         </div>
 
         <div className="card kpi-card purple">
           <div className="kpi-top">
             <span>Conformal Coverage</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--btc-gold)', fontWeight: 700 }}>
+              TARGET: 90.0%
+            </span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--btc-gold)' }}>
             {labData?.conformal?.coverage !== undefined ? (
               <AnimatedNumber value={labData.conformal.coverage * 100} decimals={1} suffix="%" />
+            ) : loading ? (
+              <Skeleton width="80px" height="2rem" />
             ) : (
-              '90.0% Target'
+              '—'
             )}
           </div>
           <div className="kpi-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Inductive Split Conformal</span>
-            <span style={{ fontSize: '0.68rem', color: 'var(--btc-gold)', fontWeight: 700 }}>1 - &alpha; = 0.90</span>
+            <span>1 - &alpha; = 0.90 Target</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Avg Set: {labData?.conformal?.avg_set_size !== undefined ? labData.conformal.avg_set_size.toFixed(2) : '1.00'}
+            </span>
           </div>
         </div>
 
         <div className="card kpi-card crimson">
           <div className="kpi-top">
             <span>Unseen Anomaly Catch</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>ACTUAL</span>
           </div>
           <div className="kpi-value mono" style={{ color: 'var(--crimson)' }}>
             {holdoutResults?.flagged_as_anomalous_ratio !== undefined ? (
@@ -215,7 +226,7 @@ export default function ModelLabView({ onTriggerDetect }) {
             )}
           </div>
           <div className="kpi-meta">
-            Hold-out Typology Detection Rate
+            Isolation Forest Hold-out Typology Catch
           </div>
         </div>
       </div>

@@ -22,6 +22,114 @@ class HealthResponse(BaseModel):
     timestamp: str
 
 
+class ReadinessDependency(BaseModel):
+    status: str
+    details: str | None = None
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    app: str
+    version: str
+    timestamp: str
+    dependencies: dict[str, ReadinessDependency]
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    """Liveness probe: answers 'Is the process alive?'"""
+    return HealthResponse(
+        status="ok",
+        version=settings.VERSION,
+        app=settings.APP_NAME,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.get("/ready", response_model=ReadinessResponse)
+async def readiness() -> ReadinessResponse:
+    """Readiness probe: answers 'Can the application actually serve requests?'
+    
+    Verifies:
+    1. Database connection and query execution (DuckDB)
+    2. Filesystem writability on persistent data directories
+    3. Essential directories (uploads, models, audit, exports)
+    
+    Returns HTTP 503 if any critical dependency fails.
+    """
+    from fastapi import HTTPException
+    from app.core.db_singleton import get_db
+
+    deps: dict[str, ReadinessDependency] = {}
+    is_ready = True
+
+    # 1. Database connection and query verification
+    try:
+        db = get_db()
+        # Execute basic query to verify connection and catalog accessibility
+        row = db.conn.execute("SELECT 1").fetchone()
+        if row and row[0] == 1:
+            deps["database"] = ReadinessDependency(status="ok", details="DuckDB connection verified")
+        else:
+            is_ready = False
+            deps["database"] = ReadinessDependency(status="error", details="Database query returned unexpected result")
+    except Exception as err:
+        is_ready = False
+        logger.error("Readiness check failed on database: %s", err)
+        deps["database"] = ReadinessDependency(status="error", details=str(err))
+
+    # 2. Required directories verification
+    required_dirs = [
+        settings.DATA_DIR,
+        settings.DATA_DIR / "uploads",
+        settings.DATA_DIR / "audit",
+        settings.DATA_DIR / "logs",
+        settings.DATA_DIR / "exports",
+        settings.MODELS_DIR,
+    ]
+    dir_errors: list[str] = []
+    for d in required_dirs:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            dir_errors.append(f"{d.name}: {e}")
+
+    if dir_errors:
+        is_ready = False
+        deps["directories"] = ReadinessDependency(status="error", details="; ".join(dir_errors))
+    else:
+        deps["directories"] = ReadinessDependency(status="ok", details=f"Verified {len(required_dirs)} directories")
+
+    # 3. Storage writability test
+    canary_path = settings.DATA_DIR / ".ready_canary"
+    try:
+        canary_path.write_text("ok", encoding="utf-8")
+        canary_path.unlink(missing_ok=True)
+        deps["storage"] = ReadinessDependency(status="ok", details="Data directory writable")
+    except Exception as err:
+        is_ready = False
+        logger.error("Readiness check failed on storage writability: %s", err)
+        deps["storage"] = ReadinessDependency(status="error", details=str(err))
+
+    resp = ReadinessResponse(
+        status="ready" if is_ready else "not_ready",
+        app=settings.APP_NAME,
+        version=settings.VERSION,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        dependencies=deps,
+    )
+
+    if not is_ready:
+        from fastapi.responses import JSONResponse
+        raise HTTPException(
+            status_code=503,
+            detail=resp.model_dump(),
+        )
+
+    return resp
+
+
+
 class SocketInfo(BaseModel):
     fd: int | None = None
     family: str
@@ -38,17 +146,6 @@ class OfflineCheckResponse(BaseModel):
     non_loopback_sockets: int
     non_loopback_connections: list[SocketInfo]
     message: str
-
-
-@router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
-    """Health check endpoint."""
-    return HealthResponse(
-        status="ok",
-        version=settings.VERSION,
-        app=settings.APP_NAME,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
 
 
 @router.get("/system/offline-check", response_model=OfflineCheckResponse)

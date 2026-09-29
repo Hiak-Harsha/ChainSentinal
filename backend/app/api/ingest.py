@@ -8,6 +8,7 @@ import json
 import logging
 from pathlib import Path
 import re
+import secrets
 import time
 from typing import Any
 
@@ -55,11 +56,14 @@ def _get_db() -> DatabaseManager:
 
 def _validate_filename(filename: str) -> str:
     """Sanitize and validate an uploaded filename. Returns safe name or raises HTTPException."""
+    if not filename or not filename.strip():
+        raise HTTPException(status_code=415, detail="Filename cannot be empty")
+
     safe_name = Path(filename).name
 
-    # Reject null bytes
-    if "\x00" in safe_name:
-        raise HTTPException(status_code=415, detail="Filename contains null bytes")
+    # Reject null bytes and path traversal
+    if "\x00" in safe_name or ".." in filename:
+        raise HTTPException(status_code=415, detail="Filename contains invalid path traversal or null bytes")
 
     # Reject non-printable / control characters
     if re.search(r"[\x00-\x1f\x7f]", safe_name):
@@ -76,13 +80,45 @@ def _validate_filename(filename: str) -> str:
     # Reject double extensions (e.g., data.csv.exe)
     name_parts = safe_name.split(".")
     if len(name_parts) > 2:
-        # Check if any intermediate "extension" is suspicious
         suspicious_exts = {".exe", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".com", ".msi", ".vbs", ".js"}
         for part in name_parts[1:]:
             if f".{part.lower()}" in suspicious_exts:
                 raise HTTPException(status_code=415, detail=f"Suspicious double extension detected in '{safe_name}'")
 
     return safe_name
+
+
+def _inspect_upload_content(content: bytes, filename: str) -> None:
+    """Inspect file content magic bytes and encoding to prevent executable or malformed uploads."""
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty (0 bytes)")
+
+    # 1. Binary executable magic byte signatures
+    magic_signatures = [
+        (b"MZ", "Windows PE executable / DLL"),
+        (b"\x7fELF", "Linux ELF binary"),
+        (b"\xca\xfe\xba\xbe", "Mach-O / Java bytecode"),
+        (b"\xfe\xed\xfa\xce", "Mach-O binary"),
+        (b"PK\x03\x04", "Zip / archive container"),
+        (b"\x1f\x8b", "Gzip compressed archive"),
+        (b"Rar!\x1a\x07", "RAR archive"),
+        (b"7z\xbc\xaf\x27\x1c", "7-Zip archive"),
+    ]
+    for sig, desc in magic_signatures:
+        if content.startswith(sig):
+            raise HTTPException(
+                status_code=415,
+                detail=f"Binary or archive file detected ({desc}). Only plain-text CSV, JSON, or XML datasets are accepted.",
+            )
+
+    # 2. Null byte and binary ratio check on preview header
+    sample = content[:1024]
+    null_count = sample.count(b"\x00")
+    if null_count > 5:
+        raise HTTPException(
+            status_code=415,
+            detail="File contains non-text binary data. Only valid CSV, JSON, or XML datasets are accepted.",
+        )
 
 
 async def _read_upload_with_limit(uploaded_file, max_bytes: int) -> bytes:
@@ -101,6 +137,7 @@ async def _read_upload_with_limit(uploaded_file, max_bytes: int) -> bytes:
             )
         chunks.append(chunk)
     return b"".join(chunks)
+
 
 
 @router.post("/detect-schema")
@@ -130,7 +167,11 @@ async def detect_schema(
         # Stream-read with size limit
         content = await _read_upload_with_limit(uploaded_file, settings.MAX_UPLOAD_BYTES)
 
-        temp_path = upload_dir / f"preview_{int(time.time()*1000)}_{safe_name}"
+        # Inspect content for binary magic bytes and malformed content
+        _inspect_upload_content(content, safe_name)
+
+        server_slug = re.sub(r"[^a-zA-Z0-9_.-]", "_", safe_name)
+        temp_path = upload_dir / f"prev_{int(time.time()*1000)}_{secrets.token_hex(4)}_{server_slug}"
         with open(temp_path, "wb") as f:
             f.write(content)
         target_path = temp_path
@@ -250,10 +291,14 @@ async def upload_dataset(
     # Stream-read with size limit
     content = await _read_upload_with_limit(file, settings.MAX_UPLOAD_BYTES)
 
+    # Inspect content for binary magic bytes and malformed content
+    _inspect_upload_content(content, safe_name)
+
     upload_dir = settings.DATA_DIR / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     job_id = f"job_{int(time.time() * 1000)}"
-    dest_path = upload_dir / f"{job_id}_{safe_name}"
+    server_slug = re.sub(r"[^a-zA-Z0-9_.-]", "_", safe_name)
+    dest_path = upload_dir / f"{job_id}_{secrets.token_hex(4)}_{server_slug}"
 
     with open(dest_path, "wb") as f:
         f.write(content)

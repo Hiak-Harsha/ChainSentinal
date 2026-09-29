@@ -8,6 +8,8 @@ import { api } from '../api';
 vi.mock('../api', () => ({
   api: {
     getHealth: vi.fn(),
+    getReadiness: vi.fn().mockResolvedValue({ status: 'ready' }),
+    getSession: vi.fn().mockResolvedValue({ authenticated: true }),
     getAlerts: vi.fn(),
     getGraphMetrics: vi.fn(),
     getEntities: vi.fn(),

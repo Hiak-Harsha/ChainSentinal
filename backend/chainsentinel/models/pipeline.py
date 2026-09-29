@@ -122,12 +122,19 @@ class ModelPipeline:
         self,
         ground_truth_path: str | Path | None = "data/cli_test/ground_truth.json",
         random_state: int = 42,
+        progress_callback: Any = None,
     ) -> dict[str, Any]:
         """Train supervised multi-class model, conformal predictor, and unsupervised anomaly detector."""
+        if progress_callback:
+            progress_callback("extracting_features", 0.15)
+
         # 1. Extract and save all entity features
         features_data = self.extractor.extract_all_and_save()
         if not features_data:
             return {"status": "error", "message": "No entities found to train on."}
+
+        if progress_callback:
+            progress_callback("resolving_labels", 0.35)
 
         # 2. Extract labels
         labels = self._resolve_labels_from_ground_truth(features_data, ground_truth_path)
@@ -156,19 +163,31 @@ class ModelPipeline:
         X_test = [features_data[i]["features"] for i in idx_test]
         y_test = [labels[i] for i in idx_test]
 
+        if progress_callback:
+            progress_callback("fitting_classifier", 0.55)
+
         # 4. Supervised Model
         clf = SupervisedTypologyClassifier(random_state=random_state)
         clf.fit(X_train, y_train)
+
+        if progress_callback:
+            progress_callback("calibrating_conformal", 0.75)
 
         # 5. Conformal Predictor Calibration
         probs_cal = clf.predict_proba(X_cal)
         conformal = ConformalPredictor(default_alpha=0.10)
         conformal.calibrate(probs_cal, y_cal, clf.classes_)
 
+        if progress_callback:
+            progress_callback("fitting_anomaly_detector", 0.88)
+
         # 6. Unsupervised Anomaly Detector
         all_X = [ef["features"] for ef in features_data]
         anomaly_model = IsolationForestAnomalyDetector(contamination=0.15, random_state=random_state)
         anomaly_model.fit(all_X)
+
+        if progress_callback:
+            progress_callback("evaluating_metrics", 0.95)
 
         # 7. Evaluate
         eval_metrics = clf.evaluate(X_test, y_test)

@@ -1,19 +1,49 @@
 /**
  * ChainSentinel Forensic API Client
- * Interfaces with FastAPI offline backend on /api/
+ * Enterprise-grade unified API layer with HttpOnly session support,
+ * configurable base URL, error normalization, AbortController support, and timeouts.
  */
 
-const API_BASE = '/api';
+// Determine API Base URL safely:
+// 1. If VITE_API_URL is configured (e.g. split frontend-backend deployment), use it.
+// 2. Otherwise default to same-origin '/api'
+export const getApiBase = () => {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    const raw = import.meta.env.VITE_API_URL.replace(/\/+$/, '');
+    return raw.endsWith('/api') ? raw : `${raw}/api`;
+  }
+  return '/api';
+};
 
-// Read API key from localStorage, window global, or Vite env
+export const API_BASE = getApiBase();
+
+/**
+ * Construct secure WebSocket URL for live forensic intelligence events.
+ * Automatically selects wss:// on HTTPS and respects VITE_WS_URL or API_BASE host.
+ */
+export const getWsUrl = () => {
+  if (typeof window === 'undefined') return '';
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
+  if (API_BASE.startsWith('http://') || API_BASE.startsWith('https://')) {
+    const u = new URL(API_BASE);
+    const wsProto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${u.host}/ws/live`;
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws/live`;
+};
+
+/**
+ * Read API key if explicitly provided for headless or test environments.
+ * Under standard operation, the browser uses secure HttpOnly session cookies (cs_session).
+ */
 export function getApiKey() {
   if (typeof window !== 'undefined' && window.__CS_API_KEY__) return window.__CS_API_KEY__;
   if (typeof localStorage !== 'undefined') {
     const stored = localStorage.getItem('chainsentinel_api_key');
     if (stored) return stored;
-  }
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CS_API_KEY) {
-    return import.meta.env.VITE_CS_API_KEY;
   }
   return '';
 }
@@ -38,22 +68,39 @@ function formatErrorDetail(detail, status) {
   return String(detail);
 }
 
+/**
+ * Core unified request dispatcher.
+ */
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    Accept: 'application/json',
     ...options.headers,
   };
 
-  // Attach API key to all requests except health
+  // Attach optional external client API key if present
   const apiKey = getApiKey();
-  if (apiKey && !endpoint.startsWith('/health')) {
+  if (apiKey && !headers['X-API-Key']) {
     headers['X-API-Key'] = apiKey;
   }
 
+  // AbortController timeout handling (default 30s timeout)
+  const timeoutMs = options.timeout ?? 30000;
+  let timer = null;
+  let signal = options.signal;
+
+  if (!signal && timeoutMs > 0 && typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
   const config = {
+    credentials: 'include', // Automatically send HttpOnly cs_session cookies
     ...options,
     headers,
+    signal,
   };
 
   try {
@@ -67,30 +114,43 @@ async function request(endpoint, options = {}) {
 
     // Surface auth failures
     if (res.status === 401) {
-      throw new Error('Authentication failed: invalid or missing API key.');
+      throw new Error('Authentication failed: invalid or missing API key or expired session.');
     }
 
     if (res.status === 403) {
-      throw new Error('Access denied: insufficient investigative permissions.');
+      throw new Error('Access denied: insufficient forensic investigative permissions.');
+    }
+
+    if (res.status === 404) {
+      throw new Error(`Resource not found: ${endpoint}`);
+    }
+
+    if (res.status === 409) {
+      throw new Error('Conflict detected with existing investigative record.');
     }
 
     // Surface upload rejections
     if (res.status === 413) {
-      throw new Error('File exceeds maximum allowed upload size (limit: 50MB).');
+      throw new Error('File exceeds maximum allowed upload size (limit: 500 MB).');
     }
 
     if (res.status === 415) {
-      throw new Error('Unsupported file type. Accepted formats: CSV, JSON, XML.');
+      throw new Error('Unsupported file type. Accepted formats: clean CSV, JSON, or XML.');
+    }
+
+    // Surface service readiness / availability
+    if (res.status === 503) {
+      throw new Error('Service Unavailable: backend database or persistent storage is initializing.');
     }
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(formatErrorDetail(errData.detail, res.status));
     }
+
     return await res.json();
   } catch (err) {
     if (err.name === 'AbortError') {
-      // Re-throw AbortError untouched so callers can detect cancellation
       throw err;
     }
     if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
@@ -98,14 +158,27 @@ async function request(endpoint, options = {}) {
     }
     console.error(`API Error [${endpoint}]:`, err);
     throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
 export const api = {
-  // System Health
+  // System Health & Readiness Probes
   getHealth: (options = {}) => request('/health', options),
+  getReadiness: (options = {}) => request('/ready', options),
 
-  // Alerts & Triage (Section 7 NTRO Contract)
+  // Authentication & Session Handshake
+  getSession: (options = {}) => request('/auth/session', options),
+  login: (credentials, options = {}) =>
+    request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+      ...options,
+    }),
+  logout: (options = {}) => request('/auth/logout', { method: 'POST', ...options }),
+
+  // Alerts & Triage
   getAlerts: (params = {}, options = {}) => {
     const query = new URLSearchParams();
     if (params.min_priority !== undefined) query.set('min_priority', params.min_priority);
@@ -186,22 +259,36 @@ export const api = {
       body: JSON.stringify(event),
       ...options,
     }),
-  exportCaseHtml: async (caseId) => {
+
+  // Case Dossier Exports (Printable HTML & Structured CSV)
+  exportCaseHtml: async (caseId, options = {}) => {
     const url = `${API_BASE}/trace/cases/${encodeURIComponent(caseId)}/export/html`;
+    const headers = { ...options.headers };
     const apiKey = getApiKey();
     if (apiKey) headers['X-API-Key'] = apiKey;
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`Export HTML failed: ${res.statusText}`);
+
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers,
+      signal: options.signal,
+    });
+    if (!res.ok) throw new Error(`Export HTML failed: HTTP ${res.status}`);
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     window.open(objectUrl, '_blank');
   },
-  exportCaseCsv: async (caseId) => {
+  exportCaseCsv: async (caseId, options = {}) => {
     const url = `${API_BASE}/trace/cases/${encodeURIComponent(caseId)}/export/csv`;
+    const headers = { ...options.headers };
     const apiKey = getApiKey();
     if (apiKey) headers['X-API-Key'] = apiKey;
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`Export CSV failed: ${res.statusText}`);
+
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers,
+      signal: options.signal,
+    });
+    if (!res.ok) throw new Error(`Export CSV failed: HTTP ${res.status}`);
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -265,11 +352,16 @@ export const api = {
     }
     const form = new FormData();
     form.append('file', fileOrDataset);
+    const headers = {};
+    const apiKey = getApiKey();
+    if (apiKey) headers['X-API-Key'] = apiKey;
+
     const res = await fetch(`${API_BASE}/ingest/detect-schema`, {
       method: 'POST',
+      credentials: 'include',
       body: form,
+      headers,
       signal: options.signal,
-      ...(getApiKey() ? { headers: { 'X-API-Key': getApiKey() } } : {}),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -281,11 +373,16 @@ export const api = {
     const form = new FormData();
     form.append('file', file);
     const query = profileName ? `?profile_name=${encodeURIComponent(profileName)}` : '';
+    const headers = {};
+    const apiKey = getApiKey();
+    if (apiKey) headers['X-API-Key'] = apiKey;
+
     const res = await fetch(`${API_BASE}/ingest/upload${query}`, {
       method: 'POST',
+      credentials: 'include',
       body: form,
+      headers,
       signal: options.signal,
-      ...(getApiKey() ? { headers: { 'X-API-Key': getApiKey() } } : {}),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -295,7 +392,7 @@ export const api = {
   },
   getIngestProfiles: (options = {}) => request('/ingest/profiles', options),
 
-  // Background Jobs
+  // Background Operations
   startJob: (endpoint, body = {}, options = {}) =>
     request(endpoint, {
       method: 'POST',
@@ -304,4 +401,9 @@ export const api = {
     }),
   getJobStatus: (jobId, options = {}) =>
     request(`/jobs/${encodeURIComponent(jobId)}`, options),
+  cancelJob: (jobId, options = {}) =>
+    request(`/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: 'POST',
+      ...options,
+    }),
 };

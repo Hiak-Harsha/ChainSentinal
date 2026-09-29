@@ -21,13 +21,15 @@ router = APIRouter(prefix="/jobs", tags=["Background Jobs"])
 class JobState:
     job_id: str
     job_type: str
-    status: str  # "started", "running", "completed", "failed"
+    status: str  # "queued", "running", "completed", "failed", "cancelled"
     progress: float = 0.0  # 0.0 to 1.0
     stage: str = "initialized"
     result: Any = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
+    started_at: float | None = None
     updated_at: float = field(default_factory=time.time)
+    completed_at: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,7 +41,9 @@ class JobState:
             "result": self.result,
             "error": self.error,
             "created_at": self.created_at,
+            "started_at": self.started_at,
             "updated_at": self.updated_at,
+            "completed_at": self.completed_at,
         }
 
 
@@ -64,8 +68,13 @@ def update_job(
         job = _jobs.get(job_id)
         if not job:
             return None
+        now = time.time()
         if status is not None:
             job.status = status
+            if status == "running" and job.started_at is None:
+                job.started_at = now
+            elif status in ("completed", "failed", "cancelled") and job.completed_at is None:
+                job.completed_at = now
         if progress is not None:
             job.progress = progress
         if stage is not None:
@@ -74,7 +83,7 @@ def update_job(
             job.result = result
         if error is not None:
             job.error = error
-        job.updated_at = time.time()
+        job.updated_at = now
 
         # Emit websocket event for progress
         event_bus.publish_sync(
@@ -99,7 +108,8 @@ def create_and_start_job(
     **kwargs: Any,
 ) -> JobState:
     job_id = f"job_{uuid.uuid4().hex[:12]}"
-    job = JobState(job_id=job_id, job_type=job_type, status="started")
+    now = time.time()
+    job = JobState(job_id=job_id, job_type=job_type, status="queued", created_at=now, updated_at=now)
     with _jobs_lock:
         _jobs[job_id] = job
 
@@ -117,6 +127,18 @@ def create_and_start_job(
     return job
 
 
+@router.post("/{job_id}/cancel")
+def cancel_job(job_id: str) -> dict[str, Any]:
+    """Request cancellation of an active background job."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    if job.status in ("completed", "failed", "cancelled"):
+        return {"status": "unchanged", "job": job.to_dict()}
+    updated = update_job(job_id, status="cancelled", stage="cancelled", error="Cancelled by operator")
+    return {"status": "cancelled", "job": updated.to_dict() if updated else job.to_dict()}
+
+
 @router.get("/{job_id}")
 def get_job_status(job_id: str) -> dict[str, Any]:
     """Poll status and result of a background job."""
@@ -132,3 +154,4 @@ def list_jobs(limit: int = 50) -> list[dict[str, Any]]:
     with _jobs_lock:
         jobs_list = sorted(_jobs.values(), key=lambda j: j.created_at, reverse=True)[:limit]
         return [j.to_dict() for j in jobs_list]
+

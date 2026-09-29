@@ -8,7 +8,7 @@ import OverviewView from './components/OverviewView';
 import { AnimatedLedgerBackdrop } from './components/visuals/AnimatedLedgerBackdrop';
 import { ToastProvider, useToast } from './components/shared/Toast';
 import Skeleton from './components/shared/Skeleton';
-import { api } from './api';
+import { api, getWsUrl } from './api';
 
 const AlertCenterView = lazy(() => import('./components/AlertCenterView'));
 const TaintPathfinderView = lazy(() => import('./components/TaintPathfinderView'));
@@ -205,19 +205,32 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pivotTo]);
 
-  // Live WebSocket feed
+  // Initial operator session handshake (auto-provisions HttpOnly session cookie on load)
+  useEffect(() => {
+    if (typeof api.getSession === 'function') {
+      api.getSession().catch((err) => {
+        console.warn('Operator session handshake:', err.message);
+      });
+    }
+  }, []);
+
+  // Live WebSocket feed with exponential backoff and leak-safe cleanup
   useEffect(() => {
     let ws = null;
     let reconnectTimeout = null;
+    let isDisposed = false;
+    let retryDelay = 2000;
 
     const connectWS = () => {
+      if (isDisposed) return;
       try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        const wsUrl = `${protocol}//${host}/ws/live`;
+        const wsUrl = getWsUrl();
+        if (!wsUrl) return;
+
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
+          retryDelay = 2000;
           console.log('[WebSocket] Live forensic feed connected');
         };
 
@@ -241,24 +254,33 @@ function AppContent() {
         };
 
         ws.onerror = () => {
-          ws?.close();
+          try { ws?.close(); } catch (_) {}
         };
 
         ws.onclose = () => {
-          reconnectTimeout = setTimeout(connectWS, 5000);
+          if (!isDisposed) {
+            reconnectTimeout = setTimeout(connectWS, retryDelay);
+            retryDelay = Math.min(retryDelay * 1.5, 30000);
+          }
         };
 
         wsRef.current = ws;
       } catch (err) {
-        console.warn('WS not available, continuing with HTTP polling:', err);
+        if (!isDisposed) {
+          reconnectTimeout = setTimeout(connectWS, retryDelay);
+          retryDelay = Math.min(retryDelay * 1.5, 30000);
+        }
       }
     };
 
     connectWS();
 
     return () => {
+      isDisposed = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
+      if (ws) {
+        try { ws.close(); } catch (_) {}
+      }
     };
   }, [refreshData, toast]);
 

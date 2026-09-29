@@ -1,5 +1,4 @@
-"""ChainSentinel core configuration."""
-
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
@@ -13,12 +12,19 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     DEBUG: bool = False
 
-    # Server
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    # Server (bind to 0.0.0.0 in container/production, supports Render $PORT)
+    HOST: str = os.environ.get("CS_HOST", "0.0.0.0")
+    PORT: int = int(os.environ.get("PORT", os.environ.get("CS_PORT", 8000)))
 
-    # Authentication
+    # Authentication & Session Security
     API_KEY: str = ""
+    SESSION_SECRET: str = ""
+    SESSION_COOKIE_NAME: str = "cs_session"
+    SESSION_MAX_AGE_SECONDS: int = 86400  # 24 hours
+    OPERATOR_PASSWORD: str = ""
+
+    # CORS Configuration (comma-separated list of allowed origins, e.g. "https://app.example.com")
+    CORS_ORIGINS: str = ""
 
     # Upload limits
     MAX_UPLOAD_BYTES: int = 524_288_000  # 500 MB
@@ -28,6 +34,7 @@ class Settings(BaseSettings):
     DB_PATH: Path = Path("data/chainsentinel.duckdb")
     SQLITE_PATH: Path = Path("data/chainsentinel.sqlite")
     MODELS_DIR: Path = Path("data/models")
+    EXPORTS_DIR: Path = Path("data/exports")
     FRONTEND_DIR: Path = Path("../frontend/out")
 
     # ML
@@ -41,3 +48,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
