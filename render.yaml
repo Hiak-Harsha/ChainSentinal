@@ -1,0 +1,28 @@
+# Render Blueprint Specification for ChainSentinel
+# Deploy to Render: https://render.com/deploy
+version: "1"
+
+services:
+  - type: web
+    name: chainsentinel
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /api/health
+    envVars:
+      - key: CS_AIR_GAPPED
+        value: "false"
+      - key: CS_HOST
+        value: "0.0.0.0"
+      - key: CS_FRONTEND_DIR
+        value: "/app/frontend/out"
+      - key: CS_DATA_DIR
+        value: "/app/data"
+      - key: CS_DB_PATH
+        value: "/app/data/chainsentinel.duckdb"
+      - key: CS_GEOIP_DB_PATH
+        value: "/app/data/geoip/dbip-country-asn-lite.mmdb"
+      - key: CS_API_KEY
+        value: "I59XOhtSA971eQQJ2YZrsaPGvQysvoc8KXQROOvCSMg"

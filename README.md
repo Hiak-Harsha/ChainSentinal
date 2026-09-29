@@ -7,6 +7,7 @@
 [![Deployment](https://img.shields.io/badge/Deployment-Air--Gapped%20Offline-blue)](#single-command-deployment)
 [![Architecture](https://img.shields.io/badge/Storage-DuckDB%20Columnar%20OLAP-orange)](#system-architecture)
 [![Interface](https://img.shields.io/badge/UI-Cytoscape.js%20SOC%20Dashboard-purple)](#analyst-dashboard-capabilities)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Hiak-Harsha/ChainSentinal)
 
 ---
 
