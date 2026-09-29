@@ -43,9 +43,13 @@ def make_zip():
                     continue
 
                 arcname = Path("chainsentinel") / rel_root / file
-                zf.write(p, arcname=str(arcname).replace("\\", "/"))
-                total_files += 1
-                total_uncompressed_bytes += p.stat().st_size
+                try:
+                    zf.write(p, arcname=str(arcname).replace("\\", "/"))
+                    total_files += 1
+                    total_uncompressed_bytes += p.stat().st_size
+                except PermissionError:
+                    print(f"Skipping locked file: {p}")
+                    continue
 
     zip_size = zip_path.stat().st_size
     print(f"Success! Packaged {total_files} files ({total_uncompressed_bytes / (1024*1024):.2f} MB uncompressed) into {zip_path.name} ({zip_size / (1024*1024):.2f} MB).")
