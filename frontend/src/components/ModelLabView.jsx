@@ -42,51 +42,45 @@ export default function ModelLabView({ onTriggerDetect }) {
 
   const handleRetrain = async () => {
     setTraining(true);
-    setTrainingProgress(0.1);
-    setTrainingStage('Loading Features');
-    setTrainingLogs([
-      'Initialized training orchestrator with DuckDB connection...',
-      'Extracting 35-dimensional multimodal feature vectors...',
-    ]);
-    toast?.showToast('Retraining supervised & unsupervised models with cross-validation...', 'info');
+    setTrainingProgress(0.05);
+    setTrainingStage('Starting training job');
+    setTrainingLogs(['Submitting model training to the backend job runner…']);
+    toast?.showToast('Model training started', 'info');
 
-    // Simulate progress ticks while API executes
-    const t1 = setTimeout(() => {
-      setTrainingProgress(0.35);
-      setTrainingStage('Fitting Classifier');
-      setTrainingLogs((prev) => [...prev, 'Fitting HistGradientBoosting multi-class classifier on ground truth...']);
-    }, 400);
-
-    const t2 = setTimeout(() => {
-      setTrainingProgress(0.65);
-      setTrainingStage('Computing TreeSHAP');
-      setTrainingLogs((prev) => [...prev, 'Computing TreeSHAP Shapley marginal values across background samples...']);
-    }, 800);
-
-    const t3 = setTimeout(() => {
-      setTrainingProgress(0.85);
-      setTrainingStage('Conformal Bounds');
-      setTrainingLogs((prev) => [...prev, 'Calibrating inductive split conformal coverage (1 - alpha = 0.90)...']);
-    }, 1200);
-
+    let jobId = null;
+    let pollTimer = null;
     try {
-      await api.trainModels();
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      setTrainingProgress(1.0);
-      setTrainingStage('Complete');
-      setTrainingLogs((prev) => [
-        ...prev,
-        'Anomaly separation verified on hold-out experiment.',
-        'Model weights and TreeSHAP attributions saved to disk.',
-      ]);
-      await loadLab();
-      toast?.showToast('Model training complete: weights, calibrations, and TreeSHAP updated', 'success');
+      const started = await api.trainModels(true);
+      jobId = started?.job_id;
+      if (!jobId) throw new Error('Backend did not return a training job ID');
+
+      const poll = async () => {
+        const job = await api.getJobStatus(jobId);
+        setTrainingProgress(Math.max(0.05, Math.min(1, job.progress ?? 0)));
+        setTrainingStage(job.stage || job.status || 'Running');
+        if (job.stage) {
+          setTrainingLogs((prev) => {
+            const label = String(job.stage).replaceAll('_', ' ');
+            return prev[prev.length - 1] === label ? prev : [...prev, label];
+          });
+        }
+
+        if (job.status === 'completed') {
+          setTrainingProgress(1);
+          setTrainingStage('Complete');
+          await loadLab();
+          toast?.showToast('Model training complete', 'success');
+          return;
+        }
+        if (job.status === 'failed') {
+          throw new Error(job.error || 'Training job failed');
+        }
+        pollTimer = setTimeout(poll, 800);
+      };
+
+      await poll();
     } catch (err) {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
+      if (pollTimer) clearTimeout(pollTimer);
       toast?.showToast(`Retraining failed: ${err.message}`, 'error');
       setTrainingLogs((prev) => [...prev, `Training error: ${err.message}`]);
     } finally {

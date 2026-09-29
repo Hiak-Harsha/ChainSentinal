@@ -150,9 +150,31 @@ def get_model_lab_diagnostics() -> dict[str, Any]:
     confirmed = sum(1 for f in feedback_list if f.get("analyst_verdict") == "confirmed_malicious")
     false_positives = sum(1 for f in feedback_list if f.get("analyst_verdict") == "false_positive")
 
+    feature_importances: list[dict[str, Any]] = []
+    model_path = settings.MODELS_DIR / "supervised_model.pkl"
+    if model_path.exists():
+        try:
+            from chainsentinel.models.supervised import SupervisedTypologyClassifier
+            clf = SupervisedTypologyClassifier.load(model_path)
+            feature_importances = [
+                {"feature": name, "importance": float(value)}
+                for name, value in sorted(
+                    clf.feature_importances_.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )[:15]
+            ]
+        except Exception:
+            logger.exception("Unable to load supervised feature importances")
+
     return {
         "status": "ready",
         "models": metrics_map,
+        # Stable UI contract: expose the fields consumed by the Model Lab directly.
+        "supervised_metrics": metrics_map.get("supervised_typology", {}),
+        "conformal": metrics_map.get("conformal_predictor", {}),
+        "holdout_experiment": metrics_map.get("holdout_experiment", {}),
+        "feature_importances": feature_importances,
         "active_learning": {
             "total_feedback": len(feedback_list),
             "confirmed_malicious": confirmed,

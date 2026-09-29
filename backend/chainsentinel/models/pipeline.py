@@ -175,6 +175,13 @@ class ModelPipeline:
         test_probs = clf.predict_proba(X_test)
         conf_sets = conformal.predict_sets(test_probs, alpha=0.10)
         avg_set_size = float(np.mean([s["set_size"] for s in conf_sets]))
+        conformal_coverage = (
+            float(np.mean([
+                str(y_true) in set(pred["conformal_set"])
+                for y_true, pred in zip(y_test, conf_sets)
+            ]))
+            if y_test else 0.0
+        )
         grade_dist = {
             "A": sum(1 for s in conf_sets if s["grade"] == "A"),
             "B": sum(1 for s in conf_sets if s["grade"] == "B"),
@@ -199,6 +206,8 @@ class ModelPipeline:
             },
             "conformal": {
                 "avg_set_size": avg_set_size,
+                "coverage": conformal_coverage,
+                "target_coverage": 0.90,
                 "grade_distribution": grade_dist,
             },
             "top_features": sorted(

@@ -18,6 +18,9 @@ export default function IngestWizardView() {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedQC, setSelectedQC] = useState(null);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const toast = useToast();
 
   const loadData = async () => {
@@ -44,6 +47,31 @@ export default function IngestWizardView() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedJob?.job_id) {
+      setSelectedQC(null);
+      return;
+    }
+    api.getIngestQC(selectedJob.job_id)
+      .then(setSelectedQC)
+      .catch(() => setSelectedQC(null));
+  }, [selectedJob?.job_id]);
+
+  const handleUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    try {
+      await api.uploadIngest(uploadFile);
+      toast?.showToast(`Uploaded ${uploadFile.name}; ingestion started`, 'success');
+      setUploadFile(null);
+      await loadData();
+    } catch (err) {
+      toast?.showToast(`Upload failed: ${err.message}`, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div style={{ position: 'relative' }}>
       {/* Header Bar */}
@@ -69,10 +97,26 @@ export default function IngestWizardView() {
           </div>
         </div>
 
-        <button className="btn btn-secondary" onClick={loadData} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh Jobs
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+            <UploadCloud size={14} />
+            {uploadFile ? uploadFile.name : 'Choose dataset'}
+            <input
+              type="file"
+              accept=".csv,.json,.xml"
+              hidden
+              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+            />
+          </label>
+          <button className="btn btn-primary" onClick={handleUpload} disabled={!uploadFile || uploading}>
+            <UploadCloud size={14} />
+            {uploading ? 'Uploading…' : 'Run Ingestion'}
+          </button>
+          <button className="btn btn-secondary" onClick={loadData} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* 4-Stage Ingestion Pipeline Flow Diagram */}
@@ -185,29 +229,50 @@ export default function IngestWizardView() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: 'var(--text-dim)' }}>Completeness Ratio:</span>
-                  <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>99.8%</span>
+                  <span className="mono" style={{ color: 'var(--emerald)', fontWeight: 700 }}>
+                    {selectedQC ? `${(selectedQC.valid_rate * 100).toFixed(1)}%` : '—'}
+                  </span>
                 </div>
               </div>
 
               {/* Quarantine Breakdown */}
               <div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
-                  Quarantine Validation Checks:
+                  Data-quality checks
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: 'rgba(255, 255, 255, 0.01)', borderRadius: 'var(--radius-sm)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>INVALID_TXID (Non-hex / length &ne; 64):</span>
-                    <span className="badge badge-emerald">0 Violations</span>
+                {selectedQC ? (
+                  <div className="quality-metric-grid">
+                    {[
+                      ['Rows processed', selectedQC.total_rows_processed],
+                      ['Valid rows', selectedQC.valid_rows],
+                      ['Quarantined', selectedQC.quarantined_rows],
+                      ['Duplicates', selectedQC.duplicate_rows],
+                      ['Unique TXs', selectedQC.unique_transactions],
+                      ['Unique addresses', selectedQC.unique_addresses],
+                      ['Unique IPs', selectedQC.unique_ips],
+                      ['Throughput', `${selectedQC.throughput_rows_per_sec}/s`],
+                    ].map(([label, value]) => (
+                      <div className="quality-metric" key={label}>
+                        <span>{label}</span>
+                        <strong>{typeof value === 'number' ? value.toLocaleString() : value}</strong>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: 'rgba(255, 255, 255, 0.01)', borderRadius: 'var(--radius-sm)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>AMOUNT_MISMATCH (Inputs - Outputs &ne; Fee):</span>
-                    <span className="badge badge-emerald">0 Violations</span>
+                ) : (
+                  <div className="empty-state-compact">
+                    QC report is not available yet. It will appear when this job completes.
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: 'rgba(255, 255, 255, 0.01)', borderRadius: 'var(--radius-sm)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>TIMESTAMP_ANOMALY (Future/Ancient TS):</span>
-                    <span className="badge badge-emerald">0 Violations</span>
+                )}
+                {selectedQC?.error_breakdown && Object.keys(selectedQC.error_breakdown).length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <div className="inspector-section-title">Quarantine reasons</div>
+                    {Object.entries(selectedQC.error_breakdown).map(([reason, count]) => (
+                      <div className="quality-row" key={reason}>
+                        <span>{reason}</span><strong>{count}</strong>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Saved Mapping Profiles */}

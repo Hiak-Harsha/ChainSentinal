@@ -27,8 +27,14 @@ vi.mock('../api', () => ({
       ],
     })),
     trainModels: vi.fn(() => Promise.resolve({
-      status: 'ok',
-      message: 'Models trained successfully',
+      job_id: 'job_train_001',
+      status: 'started',
+    })),
+    getJobStatus: vi.fn(() => Promise.resolve({
+      job_id: 'job_train_001',
+      status: 'completed',
+      progress: 1,
+      stage: 'completed',
     })),
   },
 }));
@@ -89,7 +95,7 @@ describe('ModelLabView Component', () => {
     const retrainBtn = screen.getByRole('button', { name: /Retrain All Models/i });
     fireEvent.click(retrainBtn);
 
-    expect(api.trainModels).toHaveBeenCalled();
+    expect(api.trainModels).toHaveBeenCalledWith(true);
     await waitFor(() => {
       expect(screen.getByText(/Retrain All Models/i)).toBeInTheDocument();
     });

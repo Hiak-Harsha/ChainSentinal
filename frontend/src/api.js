@@ -161,7 +161,10 @@ export const api = {
 
   // AI/ML Model Lab
   getModelLab: () => request('/models/lab'),
-  trainModels: () => request('/models/train', { method: 'POST', body: JSON.stringify({}) }),
+  trainModels: (asyncMode = false) => request(`/models/train${asyncMode ? '?async=true' : ''}`, {
+    method: 'POST',
+    body: JSON.stringify(asyncMode ? { async_mode: true } : {}),
+  }),
   runDetection: (minRisk = 0.35, limit = 50) =>
     request('/models/detect', {
       method: 'POST',
@@ -181,6 +184,23 @@ export const api = {
 
   // Ingestion & Schema Wizard
   getIngestJobs: () => request('/ingest/jobs'),
+  getIngestJob: (jobId) => request(`/ingest/jobs/${encodeURIComponent(jobId)}`),
+  getIngestQC: (jobId) => request(`/ingest/jobs/${encodeURIComponent(jobId)}/qc-report`),
+  uploadIngest: async (file, profileName = '') => {
+    const form = new FormData();
+    form.append('file', file);
+    const query = profileName ? `?profile_name=${encodeURIComponent(profileName)}` : '';
+    const res = await fetch(`${API_BASE}/ingest/upload${query}`, {
+      method: 'POST',
+      body: form,
+      ...(API_KEY ? { headers: { 'X-API-Key': API_KEY } } : {}),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Upload failed: HTTP ${res.status}`);
+    }
+    return res.json();
+  },
   getIngestProfiles: () => request('/ingest/profiles'),
 
   // Background Jobs
