@@ -44,13 +44,14 @@ def _set_session_cookie(response: Response, request: Request, subject: str = "op
     """Issue a signed session token and attach it as a secure HttpOnly cookie."""
     token = create_session_token(subject=subject)
     is_secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    samesite_policy = "none" if is_secure else "lax"
     
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         max_age=settings.SESSION_MAX_AGE_SECONDS,
         httponly=True,
-        samesite="lax",
+        samesite=samesite_policy,
         secure=is_secure,
         path="/",
     )
@@ -140,7 +141,14 @@ async def login(
 
 
 @router.post("/logout")
-async def logout(response: Response) -> dict[str, str]:
+async def logout(request: Request, response: Response) -> dict[str, str]:
     """Clear session cookie and log out."""
-    response.delete_cookie(key=settings.SESSION_COOKIE_NAME, path="/")
+    is_secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    samesite_policy = "none" if is_secure else "lax"
+    response.delete_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        path="/",
+        samesite=samesite_policy,
+        secure=is_secure,
+    )
     return {"status": "ok", "message": "Session terminated"}

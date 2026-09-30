@@ -1,0 +1,65 @@
+name: Render Backend Keep-Alive Heartbeat
+
+# Triggers every 12 minutes to prevent Render free-tier web services
+# from going inactive (Render free tier spins down after 15 min of idle).
+on:
+  schedule:
+    - cron: '*/12 * * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Custom URL to ping (defaults to RENDER_BACKEND_URL or https://chainsentinel.onrender.com)'
+        required: false
+        default: ''
+
+jobs:
+  heartbeat:
+    name: Ping Render Backend Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Heartbeat Request
+        run: |
+          # Priority: Manual input -> GitHub Secret -> Default Blueprint URL
+          URL="${{ github.event.inputs.target_url }}"
+          if [ -z "$URL" ]; then
+            URL="${{ secrets.RENDER_BACKEND_URL }}"
+          fi
+          if [ -z "$URL" ]; then
+            URL="https://chainsentinel.onrender.com"
+          fi
+
+          # Strip trailing slash if present
+          URL="${URL%/}"
+
+          # Ensure /api/health endpoint is targeted
+          if [[ "$URL" != */api/health ]]; then
+            if [[ "$URL" == */api ]]; then
+              HEALTH_URL="${URL}/health"
+            else
+              HEALTH_URL="${URL}/api/health"
+            fi
+          else
+            HEALTH_URL="$URL"
+          fi
+
+          echo "=========================================================="
+          echo "ChainSentinel Render Keep-Alive Trigger"
+          echo "Target Endpoint: $HEALTH_URL"
+          echo "Trigger Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "=========================================================="
+
+          # Ping with max 60s timeout to allow spinning up if sleeping
+          HTTP_STATUS=$(curl -s -o /tmp/health_response.json -w "%{http_code}" -m 60 "$HEALTH_URL" || echo "FAILED")
+
+          echo "Response HTTP Status: $HTTP_STATUS"
+          if [ -f /tmp/health_response.json ]; then
+            echo "Response Payload:"
+            cat /tmp/health_response.json | head -n 10
+            echo ""
+          fi
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "Backend is ACTIVE and healthy. Spin-down timer successfully reset."
+          else
+            echo "Backend responded with status $HTTP_STATUS (may have initiated spin-up). Will ping again next cycle."
+          fi

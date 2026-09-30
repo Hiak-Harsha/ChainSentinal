@@ -9,6 +9,7 @@ import { AnimatedLedgerBackdrop } from './components/visuals/AnimatedLedgerBackd
 import { ToastProvider, useToast } from './components/shared/Toast';
 import Skeleton from './components/shared/Skeleton';
 import { api, getWsUrl } from './api';
+import { startKeepAlive } from './services/keepalive';
 
 const AlertCenterView = lazy(() => import('./components/AlertCenterView'));
 const TaintPathfinderView = lazy(() => import('./components/TaintPathfinderView'));
@@ -138,6 +139,10 @@ function AppContent() {
 
   useEffect(() => {
     refreshData();
+    const cleanupKeepAlive = startKeepAlive(12);
+    return () => {
+      if (cleanupKeepAlive) cleanupKeepAlive();
+    };
   }, [refreshData]);
 
   // Pivot navigation

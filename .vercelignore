@@ -1,5 +1,11 @@
 # Vercel Deployment Ignore List
-# Keeps deployment payload lightweight and prevents uploading local artifacts
+# Deploys strictly frontend assets, keeping build times fast and artifacts tiny
+
+# Backend runtime and data (hosted on Render)
+backend/
+data/
+eval/
+scripts/
 
 # Python virtual environments & caches
 backend/.venv/
