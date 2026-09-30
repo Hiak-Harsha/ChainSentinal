@@ -120,12 +120,14 @@ async def verify_authentication(
     authorization: str | None = Header(None, alias="Authorization"),
     x_api_key: str | None = Security(_api_key_header),
     api_key_query: str | None = Security(_api_key_query),
+    x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> dict[str, Any]:
     """FastAPI dependency that validates:
     1. HttpOnly browser session cookie (cs_session)
-    2. Authorization: Bearer <API_KEY>
-    3. X-API-Key: <API_KEY>
-    4. api_key query parameter (for legacy browser tab navigation / direct downloads)
+    2. X-Session-Token header (signed session token)
+    3. Authorization: Bearer <API_KEY> or Bearer <SESSION_TOKEN>
+    4. X-API-Key: <API_KEY> or <SESSION_TOKEN>
+    5. api_key query parameter (for legacy browser tab navigation / direct downloads)
     """
     expected_api_key = _ensure_api_key()
 
@@ -135,28 +137,51 @@ async def verify_authentication(
             session_payload = verify_session_token(cs_session)
             return {"type": "session", "sub": session_payload.get("sub", "operator")}
         except HTTPException:
-            # If cookie was provided but invalid/expired, we fail explicitly
+            # If cookie was provided but invalid/expired, fail explicitly
             raise
 
-    # 2. Check Authorization Header (Bearer token)
+    # 2. Check X-Session-Token Header
+    if x_session_token:
+        try:
+            session_payload = verify_session_token(x_session_token)
+            return {"type": "session_header", "sub": session_payload.get("sub", "operator")}
+        except HTTPException:
+            raise
+
+    # 3. Check Authorization Header (Bearer token)
     if authorization:
         parts = authorization.strip().split()
         if len(parts) == 2 and parts[0].lower() == "bearer":
-            bearer_token = parts[1]
-            if secrets.compare_digest(bearer_token, expected_api_key):
+            token = parts[1]
+            if secrets.compare_digest(token, expected_api_key):
                 return {"type": "bearer", "sub": "api_client"}
+            try:
+                session_payload = verify_session_token(token)
+                return {"type": "session_bearer", "sub": session_payload.get("sub", "operator")}
+            except HTTPException:
+                pass
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-    # 3. Check X-API-Key Header
+    # 4. Check X-API-Key Header
     if x_api_key:
         if secrets.compare_digest(x_api_key, expected_api_key):
             return {"type": "x_api_key", "sub": "api_client"}
+        try:
+            session_payload = verify_session_token(x_api_key)
+            return {"type": "session_api_key", "sub": session_payload.get("sub", "operator")}
+        except HTTPException:
+            pass
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-    # 4. Check Query Parameter (legacy fallback for file downloads)
+    # 5. Check Query Parameter (legacy fallback for file downloads)
     if api_key_query:
         if secrets.compare_digest(api_key_query, expected_api_key):
             return {"type": "query_api_key", "sub": "api_client"}
+        try:
+            session_payload = verify_session_token(api_key_query)
+            return {"type": "query_session", "sub": session_payload.get("sub", "operator")}
+        except HTTPException:
+            pass
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     # No credentials supplied

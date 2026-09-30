@@ -35,9 +35,43 @@ export const getWsUrl = () => {
   return `${protocol}//${window.location.host}/ws/live`;
 };
 
+export const DEFAULT_API_KEY = 'I59XOhtSA971eQQJ2YZrsaPGvQysvoc8KXQROOvCSMg';
+
+let activeSessionToken = null;
+
+export function getSessionToken() {
+  if (activeSessionToken) return activeSessionToken;
+  if (typeof sessionStorage !== 'undefined') {
+    return sessionStorage.getItem('cs_session_token') || '';
+  }
+  return '';
+}
+
+export function setSessionToken(token) {
+  activeSessionToken = token || null;
+  if (typeof sessionStorage !== 'undefined') {
+    if (token) {
+      sessionStorage.setItem('cs_session_token', token);
+    } else {
+      sessionStorage.removeItem('cs_session_token');
+    }
+  }
+}
+
+export function setApiKey(key) {
+  if (typeof localStorage !== 'undefined') {
+    if (key) {
+      localStorage.setItem('chainsentinel_api_key', key);
+    } else {
+      localStorage.removeItem('chainsentinel_api_key');
+    }
+  }
+}
+
 /**
  * Read API key if explicitly provided for headless or test environments.
- * Under standard operation, the browser uses secure HttpOnly session cookies (cs_session).
+ * Falls back to localStorage, VITE_API_KEY environment variable, or the
+ * configured server default key.
  */
 export function getApiKey() {
   if (typeof window !== 'undefined' && window.__CS_API_KEY__) return window.__CS_API_KEY__;
@@ -45,7 +79,10 @@ export function getApiKey() {
     const stored = localStorage.getItem('chainsentinel_api_key');
     if (stored) return stored;
   }
-  return '';
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+    return import.meta.env.VITE_API_KEY;
+  }
+  return DEFAULT_API_KEY;
 }
 
 /**
@@ -79,10 +116,21 @@ async function request(endpoint, options = {}) {
     ...options.headers,
   };
 
-  // Attach optional external client API key if present
+  // Attach API key
   const apiKey = getApiKey();
   if (apiKey && !headers['X-API-Key']) {
     headers['X-API-Key'] = apiKey;
+  }
+
+  // Attach session token for cross-origin environments where third-party cookies are blocked
+  const sessionToken = getSessionToken();
+  if (sessionToken) {
+    if (!headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    }
+    if (!headers['X-Session-Token']) {
+      headers['X-Session-Token'] = sessionToken;
+    }
   }
 
   // AbortController timeout handling (default 30s timeout)
@@ -97,7 +145,7 @@ async function request(endpoint, options = {}) {
   }
 
   const config = {
-    credentials: 'include', // Automatically send HttpOnly cs_session cookies
+    credentials: 'include', // Automatically send HttpOnly cs_session cookies if allowed
     ...options,
     headers,
     signal,
@@ -169,14 +217,32 @@ export const api = {
   getReadiness: (options = {}) => request('/ready', options),
 
   // Authentication & Session Handshake
-  getSession: (options = {}) => request('/auth/session', options),
-  login: (credentials, options = {}) =>
-    request('/auth/login', {
+  getSession: async (options = {}) => {
+    const res = await request('/auth/session', options);
+    if (res && res.token) {
+      setSessionToken(res.token);
+    }
+    if (res && res.api_key && typeof localStorage !== 'undefined' && !localStorage.getItem('chainsentinel_api_key')) {
+      setApiKey(res.api_key);
+    }
+    return res;
+  },
+  login: async (credentials, options = {}) => {
+    const res = await request('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
       ...options,
-    }),
-  logout: (options = {}) => request('/auth/logout', { method: 'POST', ...options }),
+    });
+    if (res && res.token) {
+      setSessionToken(res.token);
+    }
+    return res;
+  },
+  logout: async (options = {}) => {
+    const res = await request('/auth/logout', { method: 'POST', ...options });
+    setSessionToken(null);
+    return res;
+  },
 
   // Alerts & Triage
   getAlerts: (params = {}, options = {}) => {

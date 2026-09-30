@@ -138,9 +138,26 @@ function AppContent() {
   }, [toast]);
 
   useEffect(() => {
-    refreshData();
+    let isCancelled = false;
+
+    const init = async () => {
+      try {
+        if (typeof api.getSession === 'function') {
+          await api.getSession().catch((err) => {
+            console.warn('Operator session handshake:', err?.message || err);
+          });
+        }
+      } finally {
+        if (!isCancelled) {
+          refreshData();
+        }
+      }
+    };
+
+    init();
     const cleanupKeepAlive = startKeepAlive(12);
     return () => {
+      isCancelled = true;
       if (cleanupKeepAlive) cleanupKeepAlive();
     };
   }, [refreshData]);
@@ -210,14 +227,7 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pivotTo]);
 
-  // Initial operator session handshake (auto-provisions HttpOnly session cookie on load)
-  useEffect(() => {
-    if (typeof api.getSession === 'function') {
-      api.getSession().catch((err) => {
-        console.warn('Operator session handshake:', err.message);
-      });
-    }
-  }, []);
+
 
   // Live WebSocket feed with exponential backoff and leak-safe cleanup
   useEffect(() => {

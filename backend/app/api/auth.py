@@ -38,6 +38,8 @@ class AuthStatusResponse(BaseModel):
     subject: str | None = None
     auth_method: str | None = None
     app_version: str = settings.VERSION
+    token: str | None = None
+    api_key: str | None = None
 
 
 def _set_session_cookie(response: Response, request: Request, subject: str = "operator") -> str:
@@ -66,9 +68,9 @@ async def check_or_initiate_session(
 ) -> AuthStatusResponse:
     """Handshake endpoint for browser applications.
     
-    If already validly authenticated via session cookie, returns status.
+    If already validly authenticated via session cookie, returns status and token.
     If no operator password is required (air-gapped single-workstation SOC default),
-    automatically initializes and sets the HttpOnly session cookie.
+    automatically initializes and sets the HttpOnly session cookie and returns bearer token.
     If operator password is required and session is missing/invalid, indicates requires_login=True.
     """
     if cs_session:
@@ -79,6 +81,8 @@ async def check_or_initiate_session(
                 requires_login=False,
                 subject=payload.get("sub", "operator"),
                 auth_method="session_cookie",
+                token=cs_session,
+                api_key=settings.API_KEY or None,
             )
         except HTTPException:
             # Cookie was invalid or expired
@@ -86,12 +90,14 @@ async def check_or_initiate_session(
 
     # If no operator password is set, single-operator workstation mode applies:
     if not settings.OPERATOR_PASSWORD:
-        _set_session_cookie(response, request, subject="operator")
+        token = _set_session_cookie(response, request, subject="operator")
         return AuthStatusResponse(
             authenticated=True,
             requires_login=False,
             subject="operator",
             auth_method="auto_session",
+            token=token,
+            api_key=settings.API_KEY or None,
         )
 
     # Password is required
@@ -130,13 +136,15 @@ async def login(
         logger.warning("Failed login attempt from %s", request.client.host if request.client else "unknown")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    _set_session_cookie(response, request, subject=subject)
+    token = _set_session_cookie(response, request, subject=subject)
     logger.info("Operator authenticated successfully: %s", subject)
     return AuthStatusResponse(
         authenticated=True,
         requires_login=False,
         subject=subject,
         auth_method="credentials_login",
+        token=token,
+        api_key=settings.API_KEY or None,
     )
 
 

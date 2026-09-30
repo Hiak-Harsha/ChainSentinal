@@ -100,6 +100,7 @@ app.add_middleware(
         "X-Request-ID",
         "Accept",
         "X-Requested-With",
+        "X-Session-Token",
     ],
 )
 
