@@ -6,10 +6,19 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any
-import lightgbm as lgb
 import numpy as np
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from sklearn.preprocessing import LabelEncoder
+
+try:
+    import lightgbm as lgb
+except ImportError:
+    lgb = None
+
+try:
+    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+    from sklearn.preprocessing import LabelEncoder
+except ImportError:
+    LabelEncoder = None
+    accuracy_score = f1_score = precision_score = recall_score = None
 
 from chainsentinel.features.extractor import FEATURE_NAMES
 
@@ -24,7 +33,7 @@ class SupervisedTypologyClassifier:
     def __init__(self, random_state: int = 42):
         self.random_state = random_state
         self.feature_names = list(FEATURE_NAMES)
-        self.encoder = LabelEncoder()
+        self.encoder = LabelEncoder() if LabelEncoder is not None else None
         self.booster: lgb.Booster | None = None
         self.is_fitted = False
         self.classes_: list[str] = []
@@ -44,6 +53,8 @@ class SupervisedTypologyClassifier:
 
     def fit(self, X: np.ndarray | list[dict[str, float]], y: list[str]) -> SupervisedTypologyClassifier:
         """Fit model on training features and class labels using LightGBM."""
+        if lgb is None or self.encoder is None:
+            raise RuntimeError("lightgbm and scikit-learn are required for supervised model training. Please install lightgbm and scikit-learn.")
         X_arr = self._to_array(X)
         y_encoded = self.encoder.fit_transform(y)
         self.classes_ = [str(c) for c in self.encoder.classes_]

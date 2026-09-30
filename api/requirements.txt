@@ -1,0 +1,20 @@
+# ChainSentinel Vercel Serverless Dependencies
+# Optimized for AWS Lambda / Vercel Serverless Function limits (<250MB uncompressed)
+fastapi>=0.115.0,<1.0
+uvicorn[standard]>=0.30.0,<1.0
+pydantic>=2.9.0,<3.0
+pydantic-settings>=2.5.0,<3.0
+orjson>=3.10.0,<4.0
+click>=8.1.0,<9.0
+python-multipart>=0.0.12,<1.0
+numpy>=1.26.0,<3.0
+networkx>=3.3,<4.0
+sse-starlette>=2.1.0,<3.0
+duckdb>=1.1.0,<3.0
+pyarrow>=17.0.0
+psutil>=6.0.0
+pyyaml>=6.0.0
+maxminddb>=2.6.0
+defusedxml>=0.7.1
+ijson>=3.3.0
+slowapi>=0.1.9

@@ -21,7 +21,8 @@ def resolve_registered_ground_truth(dataset_name: str | None = None) -> Path:
         raise ValueError(f"Invalid dataset name '{dataset_name}'. Client-supplied filesystem paths are prohibited.")
 
     registry: dict[str, Path] = {
-        "default": settings.DATA_DIR / "cli_test" / "ground_truth.json",
+        "default": settings.DATA_DIR / "synthetic" / "ground_truth.json",
+        "synthetic": settings.DATA_DIR / "synthetic" / "ground_truth.json",
         "cli_test": settings.DATA_DIR / "cli_test" / "ground_truth.json",
         "test_output_2": settings.DATA_DIR / "test_output_2" / "ground_truth.json",
         "test_output": settings.DATA_DIR / "test_output" / "ground_truth.json",
@@ -35,8 +36,11 @@ def resolve_registered_ground_truth(dataset_name: str | None = None) -> Path:
         if path.exists():
             return path
 
-    fallback_root = Path(__file__).resolve().parents[2] / "data" / "cli_test" / "ground_truth.json"
-    if fallback_root.exists():
-        return fallback_root
+    for fallback_candidate in [
+        Path(__file__).resolve().parents[2] / "data" / "synthetic" / "ground_truth.json",
+        Path(__file__).resolve().parents[2] / "data" / "cli_test" / "ground_truth.json",
+    ]:
+        if fallback_candidate.exists():
+            return fallback_candidate
 
     raise FileNotFoundError(f"Registered ground-truth dataset '{cleaned}' not found on server.")

@@ -1,0 +1,11 @@
+{
+  "name": "chainsentinel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ChainSentinel — AI-Powered Bitcoin Transaction Traffic Analysis & Monitoring",
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "test:frontend": "npm --prefix frontend run test"
+  }
+}

@@ -45,29 +45,36 @@ class JSONFormatter(logging.Formatter):
 
 def setup_logging() -> logging.Logger:
     """Initialize root and application loggers."""
-    log_dir = Path("data/logs")
-    if not log_dir.parent.exists() and Path("../data").exists():
+    log_dir = settings.DATA_DIR / "logs"
+    if not log_dir.parent.exists() and Path("data/logs").parent.exists():
+        log_dir = Path("data/logs")
+    elif not log_dir.parent.exists() and Path("../data").exists():
         log_dir = Path("../data/logs")
-    elif not log_dir.parent.exists() and (settings.DATA_DIR).exists():
-        log_dir = settings.DATA_DIR / "logs"
 
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "chainsentinel.log"
+    log_file = None
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "chainsentinel.log"
+    except OSError:
+        pass
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
     # Avoid duplicate handlers if setup_logging() is called multiple times
-    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
-        file_handler = RotatingFileHandler(
-            str(log_file),
-            maxBytes=10 * 1024 * 1024,  # 10 MB
-            backupCount=5,
-            encoding="utf-8",
-        )
-        file_handler.setFormatter(JSONFormatter())
-        file_handler.setLevel(logging.INFO)
-        root_logger.addHandler(file_handler)
+    if log_file and not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+        try:
+            file_handler = RotatingFileHandler(
+                str(log_file),
+                maxBytes=10 * 1024 * 1024,  # 10 MB
+                backupCount=5,
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(JSONFormatter())
+            file_handler.setLevel(logging.INFO)
+            root_logger.addHandler(file_handler)
+        except OSError:
+            pass
 
     if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
         console_handler = logging.StreamHandler(sys.stdout)

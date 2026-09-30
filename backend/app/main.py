@@ -40,12 +40,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Initialize structured logging
     setup_logging()
     # Ensure data directories exist
-    settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    (settings.DATA_DIR / "audit").mkdir(parents=True, exist_ok=True)
-    (settings.DATA_DIR / "uploads").mkdir(parents=True, exist_ok=True)
-    (settings.DATA_DIR / "logs").mkdir(parents=True, exist_ok=True)
-    (settings.DATA_DIR / "exports").mkdir(parents=True, exist_ok=True)
+    try:
+        settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        (settings.DATA_DIR / "audit").mkdir(parents=True, exist_ok=True)
+        (settings.DATA_DIR / "uploads").mkdir(parents=True, exist_ok=True)
+        (settings.DATA_DIR / "logs").mkdir(parents=True, exist_ok=True)
+        (settings.DATA_DIR / "exports").mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
     # Ensure API key & session secret are generated on first run
     _ensure_api_key()
     _ensure_session_secret()
@@ -86,7 +89,7 @@ if settings.CORS_ORIGINS:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https?://.*\.onrender\.com|http://localhost:\d+|http://127\.0\.0\.1:\d+",
+    allow_origin_regex=r"https?://.*\.vercel\.app|https?://.*\.onrender\.com|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allow_headers=[

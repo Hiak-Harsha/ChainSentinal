@@ -6,7 +6,11 @@ from pathlib import Path
 import pickle
 from typing import Any
 import numpy as np
-from sklearn.ensemble import IsolationForest
+
+try:
+    from sklearn.ensemble import IsolationForest
+except ImportError:
+    IsolationForest = None
 
 from chainsentinel.features.extractor import FEATURE_NAMES
 
@@ -18,11 +22,15 @@ class IsolationForestAnomalyDetector:
         self.contamination = contamination
         self.random_state = random_state
         self.feature_names = list(FEATURE_NAMES)
-        self.model = IsolationForest(
-            n_estimators=150,
-            contamination=contamination,
-            max_samples="auto",
-            random_state=random_state,
+        self.model = (
+            IsolationForest(
+                n_estimators=150,
+                contamination=contamination,
+                max_samples="auto",
+                random_state=random_state,
+            )
+            if IsolationForest is not None
+            else None
         )
         self.is_fitted = False
         self.score_min_: float = 0.0
@@ -40,6 +48,8 @@ class IsolationForestAnomalyDetector:
 
     def fit(self, X: np.ndarray | list[dict[str, float]]) -> IsolationForestAnomalyDetector:
         """Fit Isolation Forest on baseline or population feature vectors."""
+        if self.model is None:
+            raise RuntimeError("scikit-learn is required for IsolationForest. Please install scikit-learn.")
         X_arr = self._to_array(X)
         self.model.fit(X_arr)
         self.is_fitted = True

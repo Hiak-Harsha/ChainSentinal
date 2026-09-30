@@ -1,0 +1,39 @@
+# Vercel Deployment Ignore List
+# Keeps deployment payload lightweight and prevents uploading local artifacts
+
+# Python virtual environments & caches
+backend/.venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local database files & locks
+*.duckdb
+*.duckdb.wal
+*.pid
+data/*.duckdb
+data/*.duckdb.wal
+backend/data/*.duckdb
+
+# Heavy local test/scratch output
+data/test_*
+data/exports/*
+data/logs/*
+scratch/
+scratch_*
+
+# Archives & documentation dumps
+*.zip
+*.tar.gz
+prompt_dump.md
+ChainSentinel.zip
+ChainSentinel_backup.zip
+ChainSentinel_reviewed.zip
+
+# Node modules (reinstalled during Vercel build)
+node_modules/
+frontend/node_modules/
